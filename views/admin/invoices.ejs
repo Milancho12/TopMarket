@@ -1,0 +1,90 @@
+<%- include('_header', { title: 'Фактури', page: 'invoices' }) %>
+
+<form method="GET" action="/admin/invoices" class="filter-row no-print">
+  <div class="field"><label>Пазар *</label>
+    <select name="market_id" required>
+      <option value="">— Избери пазар —</option>
+      <% markets.forEach(m => { %><option value="<%= m.id %>" <%= filters.market_id==m.id?'selected':'' %>><%= m.name %></option><% }) %>
+    </select>
+  </div>
+  <div class="field"><label>Од датум</label><input type="date" name="date_from" value="<%= filters.date_from %>"></div>
+  <div class="field"><label>До датум</label><input type="date" name="date_to" value="<%= filters.date_to %>"></div>
+  <div class="field" style="margin-top:auto">
+    <button type="submit" class="btn btn-primary">🧾 Генерирај</button>
+  </div>
+</form>
+
+<% if (invoiceData && selMarket) { %>
+<div class="card no-print" style="margin-bottom:12px">
+  <div class="card-header">
+    <span class="card-title">Фактура готова</span>
+    <button class="btn btn-primary" onclick="window.print()">🖨️ Печати / Зачувај PDF</button>
+  </div>
+</div>
+
+<div class="invoice-preview" id="invoice-print">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;border-bottom:2px solid #000;padding-bottom:16px">
+    <div>
+      <div style="font-size:28px;font-weight:900;color:#1a1a1a">🍞 ZitoLuks</div>
+      <div style="color:#666;font-size:13px">Дистрибуција на леб</div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:20px;font-weight:800">ФАКТУРА</div>
+      <div style="color:#666;font-size:13px">Период: <%= filters.date_from %> – <%= filters.date_to %></div>
+      <div style="color:#666;font-size:13px">Датум: <%= new Date().toLocaleDateString('mk-MK') %></div>
+    </div>
+  </div>
+
+  <div style="margin-bottom:20px">
+    <div style="font-size:11px;color:#999;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Купувач</div>
+    <div style="font-size:20px;font-weight:800"><%= selMarket.name %></div>
+    <% if(selMarket.address){ %><div style="color:#666"><%= selMarket.address %></div><% } %>
+    <% if(selMarket.contact_name){ %><div style="color:#666">Контакт: <%= selMarket.contact_name %></div><% } %>
+  </div>
+
+  <table class="inv-table">
+    <thead>
+      <tr>
+        <th>Код</th><th>Назив</th><th>Единица</th>
+        <th style="text-align:right">Испорачено</th>
+        <th style="text-align:right">Вратено</th>
+        <th style="text-align:right">Нето кол.</th>
+        <th style="text-align:right">Цена (ден.)</th>
+        <th style="text-align:right">Вкупно (ден.)</th>
+      </tr>
+    </thead>
+    <tbody>
+    <% let grandTotal = 0; invoiceData.forEach(item => { grandTotal += item.total; %>
+      <tr>
+        <td><%= item.code %></td>
+        <td><%= item.name %></td>
+        <td><%= item.unit %></td>
+        <td style="text-align:right"><%= item.tot_del %></td>
+        <td style="text-align:right"><%= item.tot_ret %></td>
+        <td style="text-align:right;font-weight:700"><%= item.net_qty %></td>
+        <td style="text-align:right"><%= item.price.toFixed(2) %></td>
+        <td style="text-align:right;font-weight:700"><%= item.total.toFixed(2) %></td>
+      </tr>
+    <% }) %>
+    </tbody>
+    <tfoot>
+      <tr>
+        <td colspan="7" style="text-align:right;font-weight:700;font-size:15px">ВКУПНО:</td>
+        <td style="text-align:right;font-weight:900;font-size:16px"><%= grandTotal.toFixed(2) %> ден.</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <div style="margin-top:40px;display:grid;grid-template-columns:1fr 1fr;gap:40px">
+    <div style="border-top:1px solid #000;padding-top:8px;font-size:13px;color:#666">Издал / Потпис</div>
+    <div style="border-top:1px solid #000;padding-top:8px;font-size:13px;color:#666">Примил / Потпис</div>
+  </div>
+</div>
+<% } else { %>
+<div class="empty" style="margin-top:40px">
+  <div class="empty-icon">🧾</div>
+  <p>Изберете пазар и период за да генерирате фактура</p>
+</div>
+<% } %>
+
+<%- include('_footer') %>

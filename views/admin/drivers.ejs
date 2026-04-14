@@ -1,0 +1,165 @@
+<%- include('_header', { title: 'Возачи', page: 'drivers' }) %>
+
+<div class="card-header" style="margin-bottom:20px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px">
+  <span class="card-title">🚗 Возачи (<%= drivers.length %>)</span>
+  <button class="btn btn-primary" onclick="openModal('modal-add')">+ Додај возач</button>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <% if (drivers.length === 0) { %>
+    <div class="empty"><div class="empty-icon">🚗</div><p>Нема регистрирани возачи</p></div>
+    <% } else { %>
+    <table>
+      <thead><tr><th>#</th><th>Ime</th><th>Корисничко Ime</th><th>Телефон</th><th>Статус</th><th>Акции</th></tr></thead>
+      <tbody>
+      <% drivers.forEach((d,i) => { %>
+        <tr id="drow-<%= d.id %>">
+          <td style="color:var(--text3)"><%= i+1 %></td>
+          <td><strong><%= d.name %></strong></td>
+          <td><code style="background:var(--surface2);padding:2px 8px;border-radius:4px;font-size:12px"><%= d.username %></code></td>
+          <td><%= d.phone || '—' %></td>
+          <td><span class="badge <%= d.active ? 'badge-success' : 'badge-danger' %>"><%= d.active ? 'Активен' : 'Неактивен' %></span></td>
+          <td>
+            <div class="btn-group">
+              <button class="btn btn-sm btn-outline" onclick='editDriver(<%= JSON.stringify(d) %>)'>✏️ Уреди</button>
+              <button class="btn btn-sm btn-outline" style="color:var(--primary)" onclick="openMarketsModal(<%= d.id %>, '<%= d.name.replace(/'/g, "\\'") %>')">🏪 Пазари</button>
+            </div>
+          </td>
+        </tr>
+      <% }) %>
+      </tbody>
+    </table>
+    <% } %>
+  </div>
+</div>
+
+<!-- Add Modal -->
+<div class="modal-overlay" id="modal-add">
+  <div class="modal">
+    <div class="modal-header"><h3>Додај возач</h3><button class="modal-close" onclick="closeModal('modal-add')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-row cols-2"><div class="field"><label>Полно Ime *</label><input id="add-name" placeholder="Маре Маревски"></div><div class="field"><label>Телефон</label><input id="add-phone" type="tel"></div></div>
+      <div class="form-row cols-2"><div class="field"><label>Корисничко Ime *</label><input id="add-username" placeholder="mare"></div><div class="field"><label>Lozinka *</label><input id="add-pass" type="password" placeholder="••••••"></div></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('modal-add')">Откажи</button><button class="btn btn-primary" onclick="addDriver()">Зачувај</button></div>
+  </div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal-overlay" id="modal-edit">
+  <div class="modal">
+    <div class="modal-header"><h3>Уреди возач</h3><button class="modal-close" onclick="closeModal('modal-edit')">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-id">
+      <div class="form-row cols-2"><div class="field"><label>Полно Ime *</label><input id="edit-name"></div><div class="field"><label>Телефон</label><input id="edit-phone" type="tel"></div></div>
+      <div class="form-row cols-2"><div class="field"><label>Корисничко Ime *</label><input id="edit-username"></div><div class="field"><label>Нова Lozinka</label><input id="edit-pass" type="password" placeholder="Остави празно за да не менуваш"></div></div>
+      <div class="form-row"><div class="field"><label>Статус</label><select id="edit-active"><option value="1">Активен</option><option value="0">Неактивен</option></select></div></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('modal-edit')">Откажи</button><button class="btn btn-primary" onclick="updateDriver()">Зачувај</button></div>
+  </div>
+</div>
+
+<!-- Driver Markets Modal -->
+<div class="modal-overlay" id="modal-markets">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <h3 id="markets-modal-title">🏪 Пазари за возач</h3>
+      <button class="modal-close" onclick="closeModal('modal-markets')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--text3);font-size:13px;margin-bottom:16px">Постојано доделени пазари — се прикажуваат на почетната страница на возачот секој ден автоматски.</p>
+
+      <!-- Current assigned markets -->
+      <div id="driver-markets-list" style="margin-bottom:20px;min-height:48px"></div>
+
+      <!-- Add market -->
+      <div style="border-top:1px solid var(--border);padding-top:16px">
+        <label style="font-weight:600;font-size:13px;display:block;margin-bottom:8px">➕ Додај пазар</label>
+        <div style="display:flex;gap:8px">
+          <select id="new-market-select" style="flex:1">
+            <option value="">— Избери пазар —</option>
+            <% markets.forEach(m => { %>
+            <option value="<%= m.id %>"><%= m.name %></option>
+            <% }) %>
+          </select>
+          <button class="btn btn-primary" onclick="addDriverMarket()">Додај</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-markets')">Затвори</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentDriverId = null;
+
+async function addDriver(){
+  const r=await fetch('/admin/api/drivers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:document.getElementById('add-name').value,username:document.getElementById('add-username').value,password:document.getElementById('add-pass').value,phone:document.getElementById('add-phone').value})});
+  const d=await r.json();
+  if(d.success){toast('Возачот е додаден!');setTimeout(()=>location.reload(),800)}else toast(d.error,'error');
+}
+function editDriver(d){
+  document.getElementById('edit-id').value=d.id;
+  document.getElementById('edit-name').value=d.name||'';
+  document.getElementById('edit-username').value=d.username||'';
+  document.getElementById('edit-phone').value=d.phone||'';
+  document.getElementById('edit-pass').value='';
+  document.getElementById('edit-active').value=d.active?'1':'0';
+  openModal('modal-edit');
+}
+async function updateDriver(){
+  const id=document.getElementById('edit-id').value;
+  const r=await fetch('/admin/api/drivers/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:document.getElementById('edit-name').value,username:document.getElementById('edit-username').value,password:document.getElementById('edit-pass').value,phone:document.getElementById('edit-phone').value,active:document.getElementById('edit-active').value==='1'})});
+  const d=await r.json();
+  if(d.success){toast('Зачувано!');setTimeout(()=>location.reload(),800)}else toast(d.error,'error');
+}
+
+// ── Driver Markets ─────────────────────────────────────────
+async function openMarketsModal(driverId, driverName) {
+  currentDriverId = driverId;
+  document.getElementById('markets-modal-title').textContent = '🏪 Пазари за ' + driverName;
+  openModal('modal-markets');
+  await loadDriverMarkets();
+}
+
+async function loadDriverMarkets() {
+  const list = document.getElementById('driver-markets-list');
+  list.innerHTML = '<div style="color:var(--text3);font-size:13px">Се вчитува...</div>';
+  const res = await fetch('/admin/api/driver-markets/' + currentDriverId);
+  const rows = await res.json();
+  if (!rows.length) {
+    list.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:12px 0">Нема доделени пазари</div>';
+    return;
+  }
+  list.innerHTML = rows.map(r => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--surface2);border-radius:8px;margin-bottom:8px">
+      <span style="font-weight:600">🏪 ${r.market_name}</span>
+      <button class="btn btn-sm btn-outline" style="color:#ef4444;border-color:#ef4444" onclick="removeDriverMarket(${r.id})">✕ Отстрани</button>
+    </div>
+  `).join('');
+}
+
+async function addDriverMarket() {
+  const marketId = document.getElementById('new-market-select').value;
+  if (!marketId) { toast('Изберете пазар!','error'); return; }
+  const r = await fetch('/admin/api/driver-markets', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ driver_id: currentDriverId, market_id: marketId })
+  });
+  const d = await r.json();
+  if (d.success) { toast('Пазарот е доделен!'); document.getElementById('new-market-select').value=''; await loadDriverMarkets(); }
+  else toast(d.error || 'Грешка!','error');
+}
+
+async function removeDriverMarket(id) {
+  const r = await fetch('/admin/api/driver-markets/'+id, { method:'DELETE' });
+  const d = await r.json();
+  if (d.success) { toast('Отстранет!'); await loadDriverMarkets(); }
+  else toast(d.error || 'Грешка!','error');
+}
+</script>
+
+<%- include('_footer') %>

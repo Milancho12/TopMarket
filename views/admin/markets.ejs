@@ -1,0 +1,90 @@
+<%- include('_header', { title: 'Пазари', page: 'markets' }) %>
+
+<div class="card-header" style="margin-bottom:20px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px">
+  <span class="card-title">🏪 Список на пазари (<span id="cnt"><%= markets.length %></span>)</span>
+  <button class="btn btn-primary" onclick="openModal('modal-add')">+ Додај пазар</button>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <% if (markets.length === 0) { %>
+    <div class="empty"><div class="empty-icon">🏪</div><p>Нема додадени пазари</p></div>
+    <% } else { %>
+    <table id="markets-table">
+      <thead><tr><th>#</th><th>Назив</th><th>Адреса</th><th>Контакт</th><th>Телефон</th><th>Акции</th></tr></thead>
+      <tbody>
+      <% markets.forEach((m,i) => { %>
+        <tr id="row-<%= m.id %>">
+          <td style="color:var(--text3)"><%= i+1 %></td>
+          <td><strong><%= m.name %></strong></td>
+          <td><%= m.address || '—' %></td>
+          <td><%= m.contact_name || '—' %></td>
+          <td><%= m.contact_phone || '—' %></td>
+          <td>
+            <div class="btn-group">
+              <button class="btn btn-sm btn-outline" onclick='editMarket(<%= JSON.stringify(m) %>)'>✏️ Уреди</button>
+              <button class="btn btn-sm btn-danger" onclick="deleteMarket(<%= m.id %>, '<%= m.name.replace(/'/g,"\\'") %>')">🗑️</button>
+            </div>
+          </td>
+        </tr>
+      <% }) %>
+      </tbody>
+    </table>
+    <% } %>
+  </div>
+</div>
+
+<!-- Add Modal -->
+<div class="modal-overlay" id="modal-add">
+  <div class="modal">
+    <div class="modal-header"><h3>Додај пазар</h3><button class="modal-close" onclick="closeModal('modal-add')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-row cols-2"><div class="field"><label>Назив *</label><input id="add-name" placeholder="Маркет Центар"></div><div class="field"><label>Адреса</label><input id="add-addr" placeholder="ул. ..."></div></div>
+      <div class="form-row cols-2"><div class="field"><label>Контакт лице</label><input id="add-contact"></div><div class="field"><label>Телефон</label><input id="add-phone" type="tel"></div></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('modal-add')">Откажи</button><button class="btn btn-primary" onclick="addMarket()">Зачувај</button></div>
+  </div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal-overlay" id="modal-edit">
+  <div class="modal">
+    <div class="modal-header"><h3>Уреди пазар</h3><button class="modal-close" onclick="closeModal('modal-edit')">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-id">
+      <div class="form-row cols-2"><div class="field"><label>Назив *</label><input id="edit-name"></div><div class="field"><label>Адреса</label><input id="edit-addr"></div></div>
+      <div class="form-row cols-2"><div class="field"><label>Контакт лице</label><input id="edit-contact"></div><div class="field"><label>Телефон</label><input id="edit-phone" type="tel"></div></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('modal-edit')">Откажи</button><button class="btn btn-primary" onclick="updateMarket()">Зачувај</button></div>
+  </div>
+</div>
+
+<script>
+async function addMarket() {
+  const r = await fetch('/admin/api/markets',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:document.getElementById('add-name').value,address:document.getElementById('add-addr').value,contact_name:document.getElementById('add-contact').value,contact_phone:document.getElementById('add-phone').value})});
+  const d = await r.json();
+  if(d.success){toast('Пазарот е додаден!');setTimeout(()=>location.reload(),800)}else toast(d.error,'error');
+}
+function editMarket(m) {
+  document.getElementById('edit-id').value=m.id;
+  document.getElementById('edit-name').value=m.name||'';
+  document.getElementById('edit-addr').value=m.address||'';
+  document.getElementById('edit-contact').value=m.contact_name||'';
+  document.getElementById('edit-phone').value=m.contact_phone||'';
+  openModal('modal-edit');
+}
+async function updateMarket() {
+  const id=document.getElementById('edit-id').value;
+  const r=await fetch('/admin/api/markets/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:document.getElementById('edit-name').value,address:document.getElementById('edit-addr').value,contact_name:document.getElementById('edit-contact').value,contact_phone:document.getElementById('edit-phone').value})});
+  const d=await r.json();
+  if(d.success){toast('Зачувано!');setTimeout(()=>location.reload(),800)}else toast(d.error,'error');
+}
+async function deleteMarket(id,name) {
+  if(!confirm(`Избриши пазар "${name}"?`))return;
+  const r=await fetch('/admin/api/markets/'+id,{method:'DELETE'});
+  const d=await r.json();
+  if(d.success){document.getElementById('row-'+id).remove();toast('Пазарот е избришан');}else toast(d.error,'error');
+}
+</script>
+
+<%- include('_footer') %>

@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="mk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+  <title>ZitoLuks – Испораки</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .date-picker-bar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .date-picker-bar label { font-size: 13px; color: var(--text3); font-weight: 600; }
+    .date-picker-bar input[type="date"] {
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 14px;
+      background: var(--surface2);
+      color: var(--text);
+      outline: none;
+    }
+    .date-picker-bar input[type="date"]:focus { border-color: var(--primary); }
+    .past-banner {
+      background: linear-gradient(135deg, #f59e0b22, #f59e0b11);
+      border: 1px solid #f59e0b55;
+      border-radius: 10px;
+      margin: 12px 16px;
+      padding: 10px 14px;
+      font-size: 13px;
+      color: #92400e;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn-tomorrow {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 12px 16px 0;
+      background: linear-gradient(135deg, #7c3aed, #5b21b6);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      padding: 13px 20px;
+      font-size: 15px;
+      font-weight: 700;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .btn-tomorrow:hover { opacity: 0.9; }
+  </style>
+</head>
+<body>
+<div class="driver-app">
+
+  <!-- Header -->
+  <header class="driver-header">
+    <div class="driver-header-inner">
+      <div class="driver-brand">
+        <span class="icon">🍞</span>
+        <div>
+          <div class="name">ZitoLuks</div>
+          <div class="greeting">Добар ден, <%= user.name %>!</div>
+        </div>
+      </div>
+      <form method="POST" action="/logout" style="display:inline">
+        <button type="submit" class="driver-logout">Одјави</button>
+      </form>
+    </div>
+    <div class="driver-date-bar">
+      <span class="date-text">📅 <%= new Date(date+'T12:00:00').toLocaleDateString('mk-MK',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) %></span>
+      <span class="summary">
+        <%= assigned.filter(m=>m.submitted_at).length + extra.filter(m=>m.submitted_at).length %> /
+        <%= assigned.length + extra.length %> поднесено
+      </span>
+    </div>
+  </header>
+
+  <!-- Date Picker -->
+  <div class="date-picker-bar">
+    <label>📆 Избери ден:</label>
+    <input type="date" id="date-picker" value="<%= date %>" max="<%= new Date().toISOString().split('T')[0] %>">
+    <button class="btn btn-sm btn-primary" onclick="goToDate()" style="padding:6px 14px">Прикажи</button>
+    <% if (!isToday) { %>
+    <a href="/driver" style="font-size:13px;color:var(--primary);text-decoration:none;margin-left:4px">↩ Денес</a>
+    <% } %>
+  </div>
+
+  <% if (!isToday) { %>
+  <div class="past-banner">
+    ⚠️ Прикажувате податоци за минат датум — <strong><%= date %></strong>. Само денешни записи можат да се менуваат.
+  </div>
+  <% } %>
+
+  <div class="driver-content">
+
+    <!-- Tomorrow orders shortcut (only on today) -->
+    <% if (isToday) { %>
+    <a href="/driver/tomorrow-orders?date=<%= date %>" class="btn-tomorrow">
+      <span>📋</span>
+      <span>Нарачки за утре</span>
+      <span style="margin-left:auto;font-size:20px">›</span>
+    </a>
+    <% } %>
+
+    <!-- Assigned markets -->
+    <% if (assigned.length > 0) { %>
+    <div class="section-title">📋 <%= isToday ? 'Мои пазари денес' : 'Пазари за ' + date %></div>
+    <% assigned.forEach(m => { %>
+      <a href="/driver/market/<%= m.id %>?date=<%= date %>" class="market-card <%= m.submitted_at ? 'done' : '' %>">
+        <div class="market-icon"><%= m.submitted_at ? '✅' : '🏪' %></div>
+        <div class="market-info">
+          <div class="mname"><%= m.name %></div>
+          <% if(m.address){ %><div class="maddr">📍 <%= m.address %></div><% } %>
+        </div>
+        <div class="market-status">
+          <div class="status-dot <%= m.submitted_at ? 'done' : '' %>"></div>
+          <% if(m.submitted_at){ %><div class="status-time"><%= new Date(m.submitted_at).toLocaleTimeString('mk-MK',{hour:'2-digit',minute:'2-digit'}) %></div><% } %>
+        </div>
+      </a>
+    <% }) %>
+    <% } %>
+
+    <!-- Extra submitted markets -->
+    <% if (extra.length > 0) { %>
+    <div class="section-title">➕ Дополнителни пазари</div>
+    <% extra.forEach(m => { %>
+      <a href="/driver/market/<%= m.id %>?date=<%= date %>" class="market-card done">
+        <div class="market-icon">✅</div>
+        <div class="market-info">
+          <div class="mname"><%= m.name %></div>
+          <% if(m.address){ %><div class="maddr">📍 <%= m.address %></div><% } %>
+        </div>
+        <div class="market-status">
+          <div class="status-dot done"></div>
+          <% if(m.submitted_at){ %><div class="status-time"><%= new Date(m.submitted_at).toLocaleTimeString('mk-MK',{hour:'2-digit',minute:'2-digit'}) %></div><% } %>
+        </div>
+      </a>
+    <% }) %>
+    <% } %>
+
+    <% if (assigned.length === 0 && extra.length === 0) { %>
+    <div style="text-align:center;padding:60px 20px">
+      <div style="font-size:48px;margin-bottom:12px">📭</div>
+      <div style="font-size:16px;font-weight:700;color:#64748b"><%= isToday ? 'Нема налози за денес' : 'Нема записи за ' + date %></div>
+      <% if (isToday) { %>
+      <div style="font-size:13px;color:#94a3b8;margin-top:6px">Додај пазар со копчето подолу</div>
+      <% } %>
+    </div>
+    <% } %>
+
+    <!-- Add extra market (only today) -->
+    <% if (isToday) { %>
+    <button class="btn-add-market" onclick="document.getElementById('market-modal').classList.add('open')">
+      ➕ Додај пазар
+    </button>
+    <% } %>
+
+    <div style="height:32px"></div>
+  </div>
+
+</div>
+
+<!-- Market picker modal (only for today) -->
+<% if (isToday) { %>
+<div class="driver-modal" id="market-modal">
+  <div class="driver-modal-inner">
+    <h3>Избери пазар</h3>
+    <input type="text" id="market-search" placeholder="🔍 Пребарај..." style="width:100%;border:2px solid #e2e8f0;border-radius:10px;padding:10px 14px;font-size:15px;margin-bottom:12px;outline:none">
+    <div id="market-list">
+      <% allMarkets.forEach(m => { %>
+      <div class="market-select-item" onclick="goToMarket(<%= m.id %>)" data-name="<%= m.name.toLowerCase() %>">
+        <span class="msi-icon">🏪</span>
+        <span class="msi-name"><%= m.name %></span>
+      </div>
+      <% }) %>
+    </div>
+    <button class="btn-modal-close" onclick="document.getElementById('market-modal').classList.remove('open')">Откажи</button>
+  </div>
+</div>
+<% } %>
+
+<script>
+function goToMarket(id){ window.location.href='/driver/market/'+id; }
+
+const marketSearch = document.getElementById('market-search');
+if (marketSearch) {
+  marketSearch.addEventListener('input', function(){
+    const q=this.value.toLowerCase();
+    document.querySelectorAll('.market-select-item').forEach(el=>{
+      el.style.display=el.dataset.name.includes(q)?'flex':'none';
+    });
+  });
+}
+
+const modal = document.getElementById('market-modal');
+if (modal) modal.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
+
+function goToDate(){
+  const d = document.getElementById('date-picker').value;
+  if (d) window.location.href = '/driver?date=' + d;
+}
+// Also trigger on Enter key
+document.getElementById('date-picker').addEventListener('keydown', e => { if(e.key==='Enter') goToDate(); });
+</script>
+</body>
+</html>

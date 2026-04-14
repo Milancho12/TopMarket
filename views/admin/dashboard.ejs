@@ -1,0 +1,143 @@
+<%- include('_header', { title: 'Контролна Табла' , page: 'dashboard' }) %>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <span class="stat-icon">📦</span>
+      <div class="stat-value">
+        <%= stats.deliveries %>
+      </div>
+      <div class="stat-label">Испораки денес</div>
+    </div>
+    <div class="stat-card green">
+      <span class="stat-icon">✅</span>
+      <div class="stat-value">
+        <%= stats.delivered %>
+      </div>
+      <div class="stat-label">Испорачено (парч.)</div>
+    </div>
+    <div class="stat-card red">
+      <span class="stat-icon">↩️</span>
+      <div class="stat-value">
+        <%= stats.returned %>
+      </div>
+      <div class="stat-label">Вратено (парч.)</div>
+    </div>
+    <div class="stat-card blue">
+      <span class="stat-icon">🏪</span>
+      <div class="stat-value">
+        <%= stats.markets %>
+      </div>
+      <div class="stat-label">Активни маркети</div>
+    </div>
+    <div class="stat-card">
+      <span class="stat-icon">🚗</span>
+      <div class="stat-value">
+        <%= stats.drivers %>
+      </div>
+      <div class="stat-label">Активни возачи</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">📋 Денешни испораки – <%= new
+          Date(today+'T12:00:00').toLocaleDateString('mk-MK',{weekday:'long',day:'numeric',month:'long'}) %></span>
+    </div>
+    <div class="table-wrap">
+      <% if (recent.length===0) { %>
+        <div class="empty">
+          <div class="empty-icon">📭</div>
+          <p>Нема испораки денес</p>
+        </div>
+        <% } else { %>
+          <table>
+            <thead>
+              <tr>
+                <th>Возач</th>
+                <th>Маркети</th>
+                <th>Испорачено</th>
+                <th>Вратено</th>
+                <th>Нето</th>
+                <th>Поднесено</th>
+                <th>Акции</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% recent.forEach(d=> { %>
+                <tr>
+                  <td><strong>
+                      <%= d.driver_name %>
+                    </strong></td>
+                  <td>
+                    <%= d.market_name %>
+                  </td>
+                  <td><span class="badge badge-info">
+                      <%= d.tot_del %>
+                    </span></td>
+                  <td><span class="badge badge-danger">
+                      <%= d.tot_ret %>
+                    </span></td>
+                  <td><span class="badge badge-success">
+                      <%= d.tot_del - d.tot_ret %>
+                    </span></td>
+                  <td style="font-size:12px;color:var(--text3)">
+                    <%= d.submitted_at ? new
+                      Date(d.submitted_at).toLocaleTimeString('mk-MK',{hour:'2-digit',minute:'2-digit'}) : '—' %>
+                      <% if(d.edited_at) { %><br><span style="color:var(--primary)">✏️ изменето</span>
+                        <% } %>
+                  </td>
+                  <td>
+                    <button class="btn btn-sm btn-outline" onclick="viewDelivery(<%= d.id %>)">Детали</button>
+                  </td>
+                </tr>
+                <% }) %>
+            </tbody>
+          </table>
+          <% } %>
+    </div>
+  </div>
+
+  <!-- Detail Modal -->
+  <div class="modal-overlay" id="modal-detail">
+    <div class="modal" style="max-width:640px">
+      <div class="modal-header">
+        <h3 id="modal-det-title">Детали</h3><button class="modal-close" onclick="closeModal('modal-detail')">✕</button>
+      </div>
+      <div class="modal-body" id="modal-det-body">
+        <div class="empty">
+          <div class="empty-icon">⏳</div>
+          <p>Се вчитува...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function viewDelivery(id) {
+      openModal('modal-detail');
+      document.getElementById('modal-det-body').innerHTML = '<div class="empty"><div class="empty-icon">⏳</div><p>Се вчитува...</p></div>';
+      const res = await fetch('/admin/api/reports/' + id);
+      const data = await res.json();
+      const d = data.delivery;
+      let html = `<p style="color:var(--text2);font-size:13px;margin-bottom:16px">
+    <strong style="color:var(--text)">${d.driver_name}</strong> → <strong style="color:var(--text)">${d.market_name}</strong>
+    &nbsp;·&nbsp; ${d.date}
+    ${d.notes ? `<br>💬 ${d.notes}` : ''}
+  </p>`;
+      html += '<table style="width:100%;border-collapse:collapse;font-size:13px">';
+      html += '<thead><tr style="border-bottom:1px solid var(--border)"><th style="text-align:left;padding:8px 4px;color:var(--text3)">Артикл</th><th style="padding:8px;color:var(--text3)">Испор.</th><th style="padding:8px;color:var(--text3)">Врат.</th><th style="padding:8px;color:var(--text3)">Нето</th></tr></thead><tbody>';
+      data.items.filter(i => i.delivered_qty > 0 || i.returned_qty > 0).forEach(i => {
+        html += `<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:8px 4px"><span style="background:var(--surface2);color:var(--text3);font-size:11px;padding:1px 6px;border-radius:4px;margin-right:6px">${i.code}</span>${i.article_name}</td>
+      <td style="padding:8px;text-align:center;color:var(--info)">${i.delivered_qty}</td>
+      <td style="padding:8px;text-align:center;color:var(--danger)">${i.returned_qty}</td>
+      <td style="padding:8px;text-align:center;color:var(--success);font-weight:700">${i.delivered_qty - i.returned_qty}</td>
+    </tr>`;
+      });
+      html += '</tbody></table>';
+      document.getElementById('modal-det-title').textContent = d.market_name + ' – ' + d.date;
+      document.getElementById('modal-det-body').innerHTML = html;
+    }
+  </script>
+
+  <%- include('_footer') %>

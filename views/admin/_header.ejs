@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="mk">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title><%= title %> – ZitoLuks Admin</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="admin-layout">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <span class="icon">🍞</span>
+      <div><div class="brand">ZitoLuks</div><div class="sub">Администрација</div></div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section">Главно</div>
+      <a href="/admin" class="nav-item <%= page==='dashboard'?'active':'' %>">
+        <span class="ni">📊</span> Контролна Табла
+      </a>
+      <div class="nav-section">Управување</div>
+      <a href="/admin/markets" class="nav-item <%= page==='markets'?'active':'' %>">
+        <span class="ni">🏪</span> Пазари
+      </a>
+      <a href="/admin/articles" class="nav-item <%= page==='articles'?'active':'' %>">
+        <span class="ni">🍞</span> Артикли
+      </a>
+      <a href="/admin/drivers" class="nav-item <%= page==='drivers'?'active':'' %>">
+        <span class="ni">🚗</span> Возачи
+      </a>
+      <a href="/admin/orders" class="nav-item <%= page==='orders'?'active':'' %>">
+        <span class="ni">📋</span> Налози
+      </a>
+      <div class="nav-section">Анализа</div>
+      <a href="/admin/reports" class="nav-item <%= page==='reports'?'active':'' %>">
+        <span class="ni">📈</span> Извештаи
+      </a>
+      <a href="/admin/invoices" class="nav-item <%= page==='invoices'?'active':'' %>">
+        <span class="ni">🧾</span> Фактури
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <div class="user-avatar"><%= user.name.charAt(0).toUpperCase() %></div>
+        <div><div class="user-name"><%= user.name %></div><div class="user-role">Администратор</div></div>
+      </div>
+      <form method="POST" action="/logout">
+        <button type="submit" class="btn-logout">Одјави се</button>
+      </form>
+    </div>
+  </aside>
+  <!-- Main -->
+  <div class="admin-main">
+    <div class="admin-header">
+      <h1><%= title %></h1>
+      <span class="date-badge">📅 <%= new Date().toLocaleDateString('mk-MK',{weekday:'long',year:'numeric',month:'long',day:'numeric'}) %></span>
+    </div>
+    <div class="admin-content">

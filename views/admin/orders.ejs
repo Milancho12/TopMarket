@@ -1,0 +1,84 @@
+<%- include('_header', { title: 'Налози', page: 'orders' }) %>
+
+<div class="filter-row no-print">
+  <div class="field"><label>Датум</label><input type="date" id="sel-date" value="<%= date %>"></div>
+  <div class="field"><label>Возач</label>
+    <select id="sel-driver">
+      <option value="">— Избери возач —</option>
+      <% drivers.forEach(d => { %><option value="<%= d.id %>"><%= d.name %></option><% }) %>
+    </select>
+  </div>
+  <div class="field" style="margin-top:auto"><button class="btn btn-primary" onclick="loadOrders()">🔍 Прикажи</button></div>
+  <div class="field" style="margin-top:auto"><button class="btn btn-outline" onclick="openModal('modal-assign')">+ Додај налог</button></div>
+</div>
+
+<div class="card">
+  <div class="card-header"><span class="card-title">📋 Налози за <span id="lbl-date"><%= date %></span></span></div>
+  <div class="table-wrap">
+    <div id="orders-container">
+    <% if (orders.length === 0) { %>
+    <div class="empty"><div class="empty-icon">📋</div><p>Нема налози за овој датум</p></div>
+    <% } else { %>
+    <table>
+      <thead><tr><th>Возач</th><th>Пазар</th><th>Статус</th><th>Акции</th></tr></thead>
+      <tbody>
+      <% orders.forEach(o => { %>
+        <tr id="orow-<%= o.id %>">
+          <td><strong><%= o.driver_name %></strong></td>
+          <td><%= o.market_name %></td>
+          <td><span class="badge <%= o.submitted_at ? 'badge-success' : 'badge-warn' %>"><%= o.submitted_at ? '✅ Поднесено' : '⏳ Чека' %></span></td>
+          <td><button class="btn btn-sm btn-danger" onclick="deleteOrder(<%= o.id %>)">🗑️ Бриши</button></td>
+        </tr>
+      <% }) %>
+      </tbody>
+    </table>
+    <% } %>
+    </div>
+  </div>
+</div>
+
+<!-- Assign Modal -->
+<div class="modal-overlay" id="modal-assign">
+  <div class="modal">
+    <div class="modal-header"><h3>Додај налог</h3><button class="modal-close" onclick="closeModal('modal-assign')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-row"><div class="field"><label>Датум</label><input type="date" id="m-date" value="<%= date %>"></div></div>
+      <div class="form-row"><div class="field"><label>Возач *</label>
+        <select id="m-driver">
+          <option value="">— Избери возач —</option>
+          <% drivers.forEach(d => { %><option value="<%= d.id %>"><%= d.name %></option><% }) %>
+        </select>
+      </div></div>
+      <div class="form-row"><div class="field"><label>Пазар *</label>
+        <select id="m-market">
+          <option value="">— Избери пазар —</option>
+          <% markets.forEach(m => { %><option value="<%= m.id %>"><%= m.name %></option><% }) %>
+        </select>
+      </div></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('modal-assign')">Откажи</button><button class="btn btn-primary" onclick="addOrder()">Зачувај</button></div>
+  </div>
+</div>
+
+<script>
+async function addOrder(){
+  const r=await fetch('/admin/api/orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({driver_id:document.getElementById('m-driver').value,market_id:document.getElementById('m-market').value,date:document.getElementById('m-date').value})});
+  const d=await r.json();
+  if(d.success){toast('Налогот е додаден!');setTimeout(()=>location.reload(),800)}else toast(d.error,'error');
+}
+async function deleteOrder(id){
+  if(!confirm('Избриши го овој налог?'))return;
+  const r=await fetch('/admin/api/orders/'+id,{method:'DELETE'});
+  const d=await r.json();
+  if(d.success){document.getElementById('orow-'+id).remove();toast('Налогот е избришан');}else toast(d.error,'error');
+}
+function loadOrders(){
+  const date=document.getElementById('sel-date').value;
+  const driver=document.getElementById('sel-driver').value;
+  let url='/admin/orders?date='+date;
+  if(driver) url+='&driver_id='+driver;
+  window.location.href=url;
+}
+</script>
+
+<%- include('_footer') %>

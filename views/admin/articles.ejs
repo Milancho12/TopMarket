@@ -1,0 +1,102 @@
+<%- include('_header', { title: 'Артикли', page: 'articles' }) %>
+
+<div class="card-header" style="margin-bottom:20px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px">
+  <span class="card-title">🍞 Артикли (<span id="cnt"><%= articles.length %></span>)</span>
+  <button class="btn btn-primary" onclick="openModal('modal-add')">+ Додај артикл</button>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <% if (articles.length === 0) { %>
+    <div class="empty"><div class="empty-icon">🍞</div><p>Нема додадени артикли</p></div>
+    <% } else { %>
+    <table id="art-table">
+      <thead><tr><th>Ред</th><th>Код</th><th>Назив</th><th>Единица</th><th>Цена (ден.)</th><th>Акции</th></tr></thead>
+      <tbody id="art-tbody">
+      <% articles.forEach((a,i) => { %>
+        <tr id="arow-<%= a.id %>">
+          <td>
+            <div class="move-btns">
+              <button class="btn-move" onclick="moveArticle(<%= a.id %>,'up')" title="Горе">▲</button>
+              <button class="btn-move" onclick="moveArticle(<%= a.id %>,'down')" title="Долу">▼</button>
+            </div>
+          </td>
+          <td><span class="badge badge-warn"><%= a.code %></span></td>
+          <td><strong><%= a.name %></strong></td>
+          <td style="color:var(--text3)"><%= a.unit %></td>
+          <td><strong style="color:var(--primary)"><%= a.price.toFixed(2) %> ден.</strong></td>
+          <td>
+            <div class="btn-group">
+              <button class="btn btn-sm btn-outline" onclick='editArticle(<%= JSON.stringify(a) %>)'>✏️</button>
+              <button class="btn btn-sm btn-danger" onclick="deleteArticle(<%= a.id %>, '<%= a.name.replace(/'/g,"\\'") %>')">🗑️</button>
+            </div>
+          </td>
+        </tr>
+      <% }) %>
+      </tbody>
+    </table>
+    <% } %>
+  </div>
+</div>
+
+<!-- Add Modal -->
+<div class="modal-overlay" id="modal-add">
+  <div class="modal">
+    <div class="modal-header"><h3>Додај артикл</h3><button class="modal-close" onclick="closeModal('modal-add')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-row cols-2"><div class="field"><label>Код</label><input id="add-code" placeholder="814"></div><div class="field"><label>Единица</label><select id="add-unit"><option value="kom">kom</option><option value="kg">kg</option></select></div></div>
+      <div class="form-row"><div class="field"><label>Назив *</label><input id="add-name" placeholder="Бел леб..."></div></div>
+      <div class="form-row"><div class="field"><label>Цена (ден.)</label><input id="add-price" type="number" step="0.01" placeholder="0.00"></div></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('modal-add')">Откажи</button><button class="btn btn-primary" onclick="addArticle()">Зачувај</button></div>
+  </div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal-overlay" id="modal-edit">
+  <div class="modal">
+    <div class="modal-header"><h3>Уреди артикл</h3><button class="modal-close" onclick="closeModal('modal-edit')">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-id">
+      <div class="form-row cols-2"><div class="field"><label>Код</label><input id="edit-code"></div><div class="field"><label>Единица</label><select id="edit-unit"><option value="kom">kom</option><option value="kg">kg</option></select></div></div>
+      <div class="form-row"><div class="field"><label>Назив *</label><input id="edit-name"></div></div>
+      <div class="form-row"><div class="field"><label>Цена (ден.)</label><input id="edit-price" type="number" step="0.01"></div></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('modal-edit')">Откажи</button><button class="btn btn-primary" onclick="updateArticle()">Зачувај</button></div>
+  </div>
+</div>
+
+<script>
+async function addArticle() {
+  const r=await fetch('/admin/api/articles',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:document.getElementById('add-code').value,name:document.getElementById('add-name').value,price:document.getElementById('add-price').value,unit:document.getElementById('add-unit').value})});
+  const d=await r.json();
+  if(d.success){toast('Артиклот е додаден!');setTimeout(()=>location.reload(),800)}else toast(d.error,'error');
+}
+function editArticle(a){
+  document.getElementById('edit-id').value=a.id;
+  document.getElementById('edit-code').value=a.code||'';
+  document.getElementById('edit-name').value=a.name||'';
+  document.getElementById('edit-price').value=a.price||0;
+  document.getElementById('edit-unit').value=a.unit||'kom';
+  openModal('modal-edit');
+}
+async function updateArticle(){
+  const id=document.getElementById('edit-id').value;
+  const r=await fetch('/admin/api/articles/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:document.getElementById('edit-code').value,name:document.getElementById('edit-name').value,price:document.getElementById('edit-price').value,unit:document.getElementById('edit-unit').value})});
+  const d=await r.json();
+  if(d.success){toast('Зачувано!');setTimeout(()=>location.reload(),800)}else toast(d.error,'error');
+}
+async function deleteArticle(id,name){
+  if(!confirm(`Избриши артикл "${name}"?`))return;
+  const r=await fetch('/admin/api/articles/'+id,{method:'DELETE'});
+  const d=await r.json();
+  if(d.success){document.getElementById('arow-'+id).remove();toast('Артиклот е избришан');}else toast(d.error,'error');
+}
+async function moveArticle(id,dir){
+  const r=await fetch('/admin/api/articles/'+id+'/move',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({direction:dir})});
+  const d=await r.json();
+  if(d.success)location.reload();else toast(d.error,'error');
+}
+</script>
+
+<%- include('_footer') %>

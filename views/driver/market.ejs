@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="mk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+  <title><%= market.name %> – ZitoLuks</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .art-inputs { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+    .art-field.nxt label { color: #8b5cf6; }
+    .art-field.nxt input { border-color: #8b5cf6; background: rgba(139,92,246,0.05); }
+    .art-field.nxt input:focus { box-shadow: 0 0 0 3px rgba(139,92,246,0.2); border-color: #8b5cf6; }
+    .past-mode-banner {
+      background: linear-gradient(135deg, #f59e0b22, #f59e0b11);
+      border: 1px solid #f59e0b55;
+      border-radius: 10px;
+      margin: 12px 16px;
+      padding: 10px 14px;
+      font-size: 13px;
+      color: #92400e;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    @media (max-width: 480px) {
+      .art-inputs { grid-template-columns: 1fr 1fr; }
+      .art-field.nxt { grid-column: 1 / -1; }
+    }
+  </style>
+</head>
+<body>
+<div class="driver-app">
+
+  <!-- Header -->
+  <header class="driver-market-header">
+    <a href="/driver?date=<%= date %>" class="btn-back">←</a>
+    <div class="market-header-info">
+      <div class="mh-name"><%= market.name %></div>
+      <div class="mh-date">📅 <%= new Date(date+'T12:00:00').toLocaleDateString('mk-MK',{weekday:'long',day:'numeric',month:'long'}) %></div>
+    </div>
+    <% if (delivery && delivery.submitted_at) { %>
+    <span class="submitted-badge">✅ Поднесено</span>
+    <% } %>
+  </header>
+
+  <!-- Past date banner -->
+  <% if (!isToday) { %>
+  <div class="past-mode-banner">
+    ⚠️ Уредувате податоци за минат датум (<strong><%= date %></strong>). Внимавајте при промените.
+  </div>
+  <% } %>
+
+  <!-- Form -->
+  <form id="delivery-form">
+    <div class="articles-form" id="articles-list">
+      <% articles.forEach(a => { %>
+      <%
+        const existingDel = itemsMap[a.id] ? itemsMap[a.id].delivered_qty : (nextDayMap[a.id] || 0);
+        const existingRet = itemsMap[a.id] ? itemsMap[a.id].returned_qty : 0;
+        const existingNxt = itemsMap[a.id] ? (itemsMap[a.id].next_day_qty || 0) : 0;
+      %>
+      <div class="article-row" id="art-<%= a.id %>">
+        <div class="art-header" style="display:flex;align-items:center;margin-bottom:10px">
+          <span class="art-code"><%= a.code %></span>
+          <span class="art-name"><%= a.name %></span>
+        </div>
+        <div class="art-inputs">
+          <div class="art-field del">
+            <label>📦 Испорачано</label>
+            <input type="number" id="del-<%= a.id %>" name="items[<%= a.id %>][delivered]"
+              min="0" value="<%= existingDel %>"
+              onchange="updateNet(<%= a.id %>)" inputmode="numeric">
+          </div>
+          <div class="art-field ret">
+            <label>↩️ Вратено</label>
+            <input type="number" id="ret-<%= a.id %>" name="items[<%= a.id %>][returned]"
+              min="0" value="<%= existingRet %>"
+              onchange="updateNet(<%= a.id %>)" inputmode="numeric">
+          </div>
+          <div class="art-field nxt">
+            <label>📋 Нарачка за утре</label>
+            <input type="number" id="nxt-<%= a.id %>" name="items[<%= a.id %>][next_day]"
+              min="0" value="<%= existingNxt %>"
+              inputmode="numeric">
+          </div>
+        </div>
+        <div class="art-net" id="net-<%= a.id %>">
+          Нето: <strong id="nv-<%= a.id %>"><%= existingDel - existingRet %></strong>
+        </div>
+      </div>
+      <% }) %>
+    </div>
+
+    <div class="notes-field" style="padding:0 16px;margin-bottom:8px;max-width:600px;margin-left:auto;margin-right:auto">
+      <label>💬 Забелешка (необврзно)</label>
+      <textarea id="notes" placeholder="Внеси забелешка..."><%= delivery ? (delivery.notes||'') : '' %></textarea>
+    </div>
+
+    <div class="submit-area">
+      <% if (delivery && delivery.locked) { %>
+        <div style="text-align:center;color:#ef4444;font-weight:700;padding:12px">🔒 Испораката е заклучена од администраторот</div>
+      <% } else if (delivery && delivery.submitted_at) { %>
+        <button type="button" id="btn-edit" class="btn-edit" onclick="enableEdit()">✏️ Измени испорака</button>
+        <button type="button" id="btn-submit" class="btn-submit" style="display:none;margin-top:8px" onclick="submitDelivery()">💾 Зачувај измени</button>
+      <% } else { %>
+        <button type="button" id="btn-submit" class="btn-submit" onclick="submitDelivery()">✅ Поднеси испорака</button>
+      <% } %>
+    </div>
+  </form>
+
+</div>
+
+<div id="toast-container"></div>
+
+<script>
+const articleIds = [<% articles.forEach((a,i) => { %><%= a.id %><%= i<articles.length-1?',':'' %><% }) %>];
+const isSubmitted = <%= delivery && delivery.submitted_at ? 'true' : 'false' %>;
+const isLocked    = <%= delivery && delivery.locked ? 'true' : 'false' %>;
+const isToday     = <%= isToday ? 'true' : 'false' %>;
+
+// Lock fields if submitted
+if (isSubmitted && !isLocked) lockInputs(true);
+
+function lockInputs(lock){
+  articleIds.forEach(id=>{
+    document.getElementById('del-'+id).disabled = lock;
+    document.getElementById('ret-'+id).disabled = lock;
+    document.getElementById('nxt-'+id).disabled = lock;
+  });
+  const notes = document.getElementById('notes');
+  if (notes) notes.disabled = lock;
+}
+
+function enableEdit(){
+  lockInputs(false);
+  document.getElementById('btn-edit').style.display='none';
+  document.getElementById('btn-submit').style.display='block';
+  document.getElementById('btn-submit').textContent='💾 Зачувај измени';
+  document.getElementById('btn-submit').style.background='linear-gradient(135deg,#3b82f6,#2563eb)';
+}
+
+function updateNet(id){
+  const del=parseInt(document.getElementById('del-'+id).value)||0;
+  const ret=parseInt(document.getElementById('ret-'+id).value)||0;
+  document.getElementById('nv-'+id).textContent=del-ret;
+}
+
+async function submitDelivery(){
+  const btn=document.getElementById('btn-submit');
+  if (!btn) return;
+  btn.disabled=true;
+  btn.textContent='Се зачувува...';
+
+  const items={};
+  articleIds.forEach(id=>{
+    items[id]={
+      delivered: document.getElementById('del-'+id).value||'0',
+      returned:  document.getElementById('ret-'+id).value||'0',
+      next_day:  document.getElementById('nxt-'+id).value||'0'
+    };
+  });
+
+  try {
+    const res=await fetch('/driver/market/<%= market.id %>?date=<%= date %>',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({notes:document.getElementById('notes').value, items})
+    });
+    const data=await res.json();
+    if(data.success){
+      toast('Успешно поднесено! ✅','success');
+      setTimeout(()=>window.location.href='/driver',1200);
+    } else {
+      toast(data.error||'Грешка!','error');
+      btn.disabled=false;
+      btn.textContent='✅ Поднеси испорака';
+    }
+  } catch(e){
+    toast('Грешка при поврзување!','error');
+    btn.disabled=false;
+    btn.textContent='✅ Поднеси испорака';
+  }
+}
+
+function toast(msg, type='success'){
+  const t=document.createElement('div');
+  t.className='toast '+type;
+  t.textContent=msg;
+  document.getElementById('toast-container').appendChild(t);
+  setTimeout(()=>t.remove(),3500);
+}
+
+articleIds.forEach(id=>updateNet(id));
+</script>
+</body>
+</html>

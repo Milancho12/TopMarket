@@ -1,0 +1,107 @@
+<%- include('_header', { title: 'Извештаи', page: 'reports' }) %>
+
+<form method="GET" action="/admin/reports" class="filter-row no-print">
+  <div class="field"><label>Од датум</label><input type="date" name="date_from" value="<%= filters.date_from %>"></div>
+  <div class="field"><label>До датум</label><input type="date" name="date_to" value="<%= filters.date_to %>"></div>
+  <div class="field"><label>Возач</label>
+    <select name="driver_id">
+      <option value="">Сите возачи</option>
+      <% drivers.forEach(d => { %><option value="<%= d.id %>" <%= filters.driver_id==d.id?'selected':'' %>><%= d.name %></option><% }) %>
+    </select>
+  </div>
+  <div class="field"><label>Пазар</label>
+    <select name="market_id">
+      <option value="">Сите пазари</option>
+      <% markets.forEach(m => { %><option value="<%= m.id %>" <%= filters.market_id==m.id?'selected':'' %>><%= m.name %></option><% }) %>
+    </select>
+  </div>
+  <div class="field" style="margin-top:auto"><button type="submit" class="btn btn-primary">🔍 Пребарај</button></div>
+</form>
+
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">📈 Резултати (<%= deliveries.length %>)</span>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-sm btn-outline no-print" onclick="window.print()">🖨️ Печати</button>
+      <button class="btn btn-sm btn-primary no-print" onclick="downloadWord()">📄 Word документ</button>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <% if (deliveries.length === 0) { %>
+    <div class="empty"><div class="empty-icon">📭</div><p>Нема резултати</p></div>
+    <% } else { %>
+    <table>
+      <thead><tr><th>Датум</th><th>Возач</th><th>Пазар</th><th>Испорачено</th><th>Вратено</th><th>Нето</th><th>Поднесено</th><th>Акции</th></tr></thead>
+      <tbody>
+      <% deliveries.forEach(d => { %>
+        <tr>
+          <td><%= d.date %></td>
+          <td><strong><%= d.driver_name %></strong></td>
+          <td><%= d.market_name %></td>
+          <td><span class="badge badge-info"><%= d.tot_del %></span></td>
+          <td><span class="badge badge-danger"><%= d.tot_ret %></span></td>
+          <td><span class="badge badge-success"><%= d.tot_del - d.tot_ret %></span></td>
+          <td style="font-size:12px;color:var(--text3)">
+            <%= d.submitted_at ? new Date(d.submitted_at).toLocaleString('mk-MK') : '—' %>
+            <% if(d.edited_at){ %><br><span style="color:var(--primary)">✏️</span><% } %>
+          </td>
+          <td>
+            <div class="btn-group">
+              <button class="btn btn-sm btn-outline no-print" onclick="viewDelivery(<%= d.id %>)">Детали</button>
+              <button class="btn btn-sm btn-outline no-print" style="color:var(--danger);border-color:var(--danger)" onclick="deleteDelivery(<%= d.id %>)">Избриши</button>
+            </div>
+          </td>
+        </tr>
+      <% }) %>
+      </tbody>
+    </table>
+    <% } %>
+  </div>
+</div>
+
+<!-- Detail Modal -->
+<div class="modal-overlay" id="modal-detail">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-header"><h3 id="modal-det-title">Детали</h3><button class="modal-close" onclick="closeModal('modal-detail')">✕</button></div>
+    <div class="modal-body" id="modal-det-body"></div>
+  </div>
+</div>
+
+<script>
+async function viewDelivery(id) {
+  openModal('modal-detail');
+  document.getElementById('modal-det-body').innerHTML='<div class="empty"><div class="empty-icon">⏳</div><p>Се вчитува...</p></div>';
+  const res=await fetch('/admin/api/reports/'+id);
+  const data=await res.json();
+  const d=data.delivery;
+  let html=`<p style="color:var(--text2);font-size:13px;margin-bottom:16px"><strong style="color:var(--text)">${d.driver_name}</strong> → <strong style="color:var(--text)">${d.market_name}</strong> &nbsp;·&nbsp; ${d.date}${d.notes?`<br>💬 ${d.notes}`:''}</p>`;
+  html+='<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="border-bottom:1px solid var(--border)"><th style="text-align:left;padding:8px 4px;color:var(--text3)">Артикл</th><th style="padding:8px;color:var(--text3)">Испор.</th><th style="padding:8px;color:var(--text3)">Врат.</th><th style="padding:8px;color:var(--text3)">Нето</th></tr></thead><tbody>';
+  data.items.filter(i=>i.delivered_qty>0||i.returned_qty>0).forEach(i=>{
+    html+=`<tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 4px"><span style="background:var(--surface2);color:var(--text3);font-size:11px;padding:1px 6px;border-radius:4px;margin-right:6px">${i.code}</span>${i.article_name}</td><td style="padding:8px;text-align:center;color:var(--info)">${i.delivered_qty}</td><td style="padding:8px;text-align:center;color:var(--danger)">${i.returned_qty}</td><td style="padding:8px;text-align:center;color:var(--success);font-weight:700">${i.delivered_qty-i.returned_qty}</td></tr>`;
+  });
+  html+='</tbody></table>';
+  document.getElementById('modal-det-title').textContent=d.market_name+' – '+d.date;
+  document.getElementById('modal-det-body').innerHTML=html;
+}
+
+async function deleteDelivery(id) {
+  if (confirm('Дали сте сигурни дека сакате да го избришете овој извештај?')) {
+    const res = await fetch('/admin/api/reports/'+id, { method: 'DELETE' });
+    const data = await res.json();
+    if(data.success) location.reload();
+    else alert(data.error || 'Грешка при бришење');
+  }
+}
+
+function downloadWord() {
+  const dateFrom = document.querySelector('input[name="date_from"]').value;
+  const dateTo   = document.querySelector('input[name="date_to"]').value;
+  const marketId = document.querySelector('select[name="market_id"]').value;
+  if (!dateFrom || !dateTo) { alert('Изберете датуми!'); return; }
+  let url = `/admin/reports/word?date_from=${dateFrom}&date_to=${dateTo}`;
+  if (marketId) url += `&market_id=${marketId}`;
+  window.location.href = url;
+}
+</script>
+
+<%- include('_footer') %>

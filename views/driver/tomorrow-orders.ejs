@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="mk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+  <title>Нарачки за утре – ZitoLuks</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .orders-header {
+      background: linear-gradient(135deg, #7c3aed, #5b21b6);
+      padding: 20px 16px 16px;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .btn-back-white {
+      background: rgba(255,255,255,0.2);
+      border: none;
+      color: #fff;
+      font-size: 20px;
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .btn-back-white:hover { background: rgba(255,255,255,0.3); }
+    .orders-header-info { flex: 1; }
+    .orders-title { font-size: 20px; font-weight: 800; }
+    .orders-subtitle { font-size: 13px; opacity: 0.8; margin-top: 2px; }
+    .date-selector-row {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .date-selector-row label { font-size: 13px; color: var(--text3); font-weight: 600; }
+    .date-selector-row input[type="date"] {
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 14px;
+      background: var(--surface2);
+      color: var(--text);
+    }
+    .summary-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      margin: 16px;
+      overflow: hidden;
+    }
+    .summary-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      font-weight: 700;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--surface2);
+    }
+    .summary-table { width: 100%; border-collapse: collapse; }
+    .summary-table th {
+      text-align: left;
+      padding: 10px 16px;
+      font-size: 12px;
+      color: var(--text3);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border);
+    }
+    .summary-table td {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      font-size: 15px;
+    }
+    .summary-table tr:last-child td { border-bottom: none; }
+    .summary-table td:last-child { text-align: right; font-weight: 700; font-size: 18px; color: var(--primary); }
+    .code-badge {
+      background: var(--surface2);
+      color: var(--text3);
+      font-size: 12px;
+      padding: 2px 8px;
+      border-radius: 6px;
+      margin-right: 8px;
+      font-weight: 600;
+    }
+    .market-section { margin: 0 16px 16px; }
+    .market-section-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text3);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+      padding-top: 16px;
+    }
+    .market-item-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 6px;
+      font-size: 14px;
+    }
+    .market-item-row .qty { font-weight: 800; font-size: 18px; color: var(--primary); }
+    .empty-orders {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text3);
+    }
+    .empty-orders .big { font-size: 48px; margin-bottom: 12px; }
+    .empty-orders .msg { font-size: 16px; font-weight: 700; }
+    .empty-orders .sub { font-size: 13px; margin-top: 6px; }
+  </style>
+</head>
+<body>
+<div class="driver-app">
+
+  <!-- Header -->
+  <div class="orders-header">
+    <a href="/driver?date=<%= date %>" class="btn-back-white">←</a>
+    <div class="orders-header-info">
+      <div class="orders-title">📋 Нарачки за утре</div>
+      <div class="orders-subtitle">Внесени на: <%= new Date(date+'T12:00:00').toLocaleDateString('mk-MK',{weekday:'long',day:'numeric',month:'long'}) %></div>
+    </div>
+  </div>
+
+  <!-- Date Selector -->
+  <div class="date-selector-row">
+    <label>📆 За кој ден:</label>
+    <input type="date" id="date-picker" value="<%= date %>" max="<%= new Date().toISOString().split('T')[0] %>">
+    <button class="btn btn-sm btn-primary" onclick="goToDate()" style="padding:6px 14px">Прикажи</button>
+  </div>
+
+  <% if (items.length === 0) { %>
+  <div class="empty-orders">
+    <div class="big">📭</div>
+    <div class="msg">Нема нарачки за <%= date %></div>
+    <div class="sub">Внеси нарачки за утре на страницата на пазарот</div>
+  </div>
+  <% } else { %>
+
+  <!-- Aggregated summary -->
+  <div class="summary-card">
+    <div class="summary-header">
+      <span>📊</span>
+      <span>Вкупно по артикл</span>
+      <span style="margin-left:auto;font-size:13px;color:var(--text3)"><%= items.length %> артикли</span>
+    </div>
+    <table class="summary-table">
+      <thead>
+        <tr><th>Артикл</th><th style="text-align:right">Количина</th></tr>
+      </thead>
+      <tbody>
+        <% items.forEach(item => { %>
+        <tr>
+          <td>
+            <span class="code-badge"><%= item.code %></span>
+            <span><%= item.name %></span>
+          </td>
+          <td><%= item.total_qty %></td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Per-market breakdown -->
+  <%
+    const markets = {};
+    byMarket.forEach(r => {
+      if (!markets[r.market_name]) markets[r.market_name] = [];
+      markets[r.market_name].push(r);
+    });
+  %>
+  <% Object.entries(markets).forEach(([mname, rows]) => { %>
+  <div class="market-section">
+    <div class="market-section-title">🏪 <%= mname %></div>
+    <% rows.forEach(r => { %>
+    <div class="market-item-row">
+      <span>
+        <span class="code-badge"><%= r.code %></span>
+        <span><%= r.art_name %></span>
+      </span>
+      <span class="qty"><%= r.next_day_qty %></span>
+    </div>
+    <% }) %>
+  </div>
+  <% }) %>
+
+  <div style="height:32px"></div>
+  <% } %>
+</div>
+
+<script>
+function goToDate(){
+  const d = document.getElementById('date-picker').value;
+  if (d) window.location.href = '/driver/tomorrow-orders?date=' + d;
+}
+document.getElementById('date-picker').addEventListener('keydown', e => { if(e.key==='Enter') goToDate(); });
+</script>
+</body>
+</html>
