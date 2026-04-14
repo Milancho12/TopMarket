@@ -70,12 +70,9 @@
     <div class="modal-body">
       <p style="color:var(--text3);font-size:13px;margin-bottom:16px">Постојано доделени пазари — се прикажуваат на почетната страница на возачот секој ден автоматски.</p>
 
-      <!-- Current assigned markets -->
-      <div id="driver-markets-list" style="margin-bottom:20px;min-height:48px"></div>
-
       <!-- Add market -->
-      <div style="border-top:1px solid var(--border);padding-top:16px">
-        <label style="font-weight:600;font-size:13px;display:block;margin-bottom:8px">➕ Додај пазар</label>
+      <div style="background:var(--surface2); padding:16px; border-radius:8px; margin-bottom:16px; border:1px solid var(--border)">
+        <label style="font-weight:600;font-size:13px;display:block;margin-bottom:8px">➕ Додај нов пазар</label>
         <div style="display:flex;gap:8px">
           <select id="new-market-select" style="flex:1">
             <option value="">— Избери пазар —</option>
@@ -86,6 +83,10 @@
           <button class="btn btn-primary" onclick="addDriverMarket()">Додај</button>
         </div>
       </div>
+
+      <!-- Current assigned markets -->
+      <div style="font-weight:600; font-size:13px; margin-bottom:8px;">Тековни пазари:</div>
+      <div id="driver-markets-list" style="min-height:48px; max-height:40vh; overflow-y:auto; padding-right:8px; display:flex; flex-direction:column; gap:8px;"></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('modal-markets')">Затвори</button>

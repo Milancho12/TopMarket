@@ -1,0 +1,39 @@
+<%- include('_header', { title: 'Подесувања на профил' , page: 'settings' }) %>
+
+<div style="max-width: 500px; margin: 0 auto; margin-top: 40px;">
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">🔐 Промена на Корисничко име и Лозинка</span>
+    </div>
+    <div style="padding: 24px;">
+
+      <% if (error) { %>
+        <div style="background: #fef2f2; color: #991b1b; padding: 12px; border-radius: 8px; border: 1px solid #fecaca; margin-bottom: 20px; font-weight: 600; font-size: 14px;">
+          ⚠️ <%= error %>
+        </div>
+      <% } %>
+
+      <% if (success) { %>
+        <div style="background: #f0fdf4; color: #166534; padding: 12px; border-radius: 8px; border: 1px solid #bbf7d0; margin-bottom: 20px; font-weight: 600; font-size: 14px;">
+          ✅ <%= success %>
+        </div>
+      <% } %>
+
+      <form method="POST" action="/admin/settings">
+        <label style="display: block; font-weight: 600; font-size: 14px; margin-bottom: 6px; color: var(--text2)">Име и Презиме (не се менува)</label>
+        <input type="text" value="<%= admin.name %>" disabled style="width: 100%; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface2); color: var(--text3); margin-bottom: 16px; outline: none;">
+
+        <label style="display: block; font-weight: 600; font-size: 14px; margin-bottom: 6px; color: var(--text2)">Корисничко име</label>
+        <input type="text" name="username" value="<%= admin.username %>" required style="width: 100%; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); margin-bottom: 16px; outline: none; font-size: 15px;">
+
+        <label style="display: block; font-weight: 600; font-size: 14px; margin-bottom: 6px; color: var(--text2);">Нова лозинка</label>
+        <div style="font-size: 12px; color: var(--text3); margin-bottom: 8px;">Оставете празно ако не сакате да ја промените лозинката.</div>
+        <input type="password" name="password" placeholder="Внеси нова лозинка..." style="width: 100%; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); margin-bottom: 24px; outline: none; font-size: 15px;">
+
+        <button type="submit" class="btn btn-primary" style="width: 100%; padding: 12px; font-size: 15px; border-radius: 10px;">💾 Зачувај промени</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<%- include('_footer') %>

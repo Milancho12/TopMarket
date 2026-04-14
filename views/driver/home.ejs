@@ -155,20 +155,19 @@
     </div>
     <% } %>
 
-    <!-- Add extra market (only today) -->
-    <% if (isToday) { %>
-    <button class="btn-add-market" onclick="document.getElementById('market-modal').classList.add('open')">
-      ➕ Додај пазар
-    </button>
-    <% } %>
-
-    <div style="height:32px"></div>
+    <div style="height:100px"></div>
   </div>
 
 </div>
 
-<!-- Market picker modal (only for today) -->
-<% if (isToday) { %>
+<!-- Floating Add extra market -->
+<div style="position:fixed; bottom:0; left:0; width:100%; padding:16px; background:linear-gradient(to top, var(--bg, #f8fafc) 60%, transparent); display:flex; justify-content:center; pointer-events:none; z-index:90;">
+  <button class="btn-add-market" onclick="document.getElementById('market-modal').classList.add('open')" style="pointer-events:auto; margin:0; width:90%; max-width:400px; box-shadow:0 8px 20px rgba(37,99,235,0.4);">
+    ➕ Додај дополнителен пазар
+  </button>
+</div>
+
+<!-- Market picker modal -->
 <div class="driver-modal" id="market-modal">
   <div class="driver-modal-inner">
     <h3>Избери пазар</h3>
@@ -184,10 +183,9 @@
     <button class="btn-modal-close" onclick="document.getElementById('market-modal').classList.remove('open')">Откажи</button>
   </div>
 </div>
-<% } %>
 
 <script>
-function goToMarket(id){ window.location.href='/driver/market/'+id; }
+function goToMarket(id){ window.location.href='/driver/market/'+id+'?date=<%= date %>'; }
 
 const marketSearch = document.getElementById('market-search');
 if (marketSearch) {

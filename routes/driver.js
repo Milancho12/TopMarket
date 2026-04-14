@@ -19,18 +19,15 @@ router.get('/', async (req, res) => {
       WHERE o.driver_id=? AND o.date=? AND m.active=1 ORDER BY m.name`,
       [driverId, date, driverId, date]);
 
-    // Permanently assigned markets (only show on today — for past dates show what was done)
-    let permMarkets = [];
-    if (isToday) {
-      permMarkets = await db.allAsync(`
-        SELECT m.id, m.name, m.address, d.id del_id, d.submitted_at
-        FROM driver_markets dm JOIN markets m ON m.id=dm.market_id
-        LEFT JOIN deliveries d ON d.driver_id=? AND d.market_id=m.id AND d.date=?
-        WHERE dm.driver_id=? AND m.active=1
-        AND m.id NOT IN (SELECT market_id FROM orders WHERE driver_id=? AND date=?)
-        ORDER BY m.name`,
-        [driverId, date, driverId, driverId, date]);
-    }
+    // Permanently assigned markets
+    const permMarkets = await db.allAsync(`
+      SELECT m.id, m.name, m.address, d.id del_id, d.submitted_at
+      FROM driver_markets dm JOIN markets m ON m.id=dm.market_id
+      LEFT JOIN deliveries d ON d.driver_id=? AND d.market_id=m.id AND d.date=?
+      WHERE dm.driver_id=? AND m.active=1
+      AND m.id NOT IN (SELECT market_id FROM orders WHERE driver_id=? AND date=?)
+      ORDER BY m.name`,
+      [driverId, date, driverId, driverId, date]);
 
     const assignedIds = new Set(orderMarkets.map(m => m.id));
     const assigned = [...orderMarkets, ...permMarkets.filter(m => !assignedIds.has(m.id))];

@@ -44,6 +44,7 @@
         <div class="user-avatar"><%= user.name.charAt(0).toUpperCase() %></div>
         <div><div class="user-name"><%= user.name %></div><div class="user-role">Администратор</div></div>
       </div>
+      <a href="/admin/settings" class="btn-outline" style="text-align:center;text-decoration:none;display:block;margin-bottom:8px;font-size:13px;padding:6px">⚙️ Подесувања</a>
       <form method="POST" action="/logout">
         <button type="submit" class="btn-logout">Одјави се</button>
       </form>
