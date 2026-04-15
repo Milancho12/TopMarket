@@ -53,7 +53,15 @@
   <!-- Main -->
   <div class="admin-main">
     <div class="admin-header">
-      <h1><%= title %></h1>
-      <span class="date-badge">📅 <%= new Date().toLocaleDateString('mk-MK',{weekday:'long',year:'numeric',month:'long',day:'numeric'}) %></span>
+      <div style="display:flex;align-items:center;gap:12px">
+        <button class="mobile-menu-btn" onclick="document.querySelector('.sidebar').classList.toggle('show-mobile')">☰</button>
+        <h1><%= title %></h1>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="date-badge hide-mobile">📅 <%= new Date().toLocaleDateString('mk-MK',{weekday:'long',year:'numeric',month:'long',day:'numeric'}) %></span>
+        <form method="POST" action="/logout" class="mobile-logout-form">
+          <button type="submit" class="btn btn-outline" style="padding:6px 12px;font-size:12px;color:var(--danger);border-color:#ef444440">Одјави се</button>
+        </form>
+      </div>
     </div>
     <div class="admin-content">

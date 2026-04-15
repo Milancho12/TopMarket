@@ -13,11 +13,11 @@ router.post('/login', async (req, res) => {
     const { username, password } = req.body;
     const user = await db.getAsync('SELECT * FROM users WHERE username=? AND active=1', [username]);
     if (!user || !bcrypt.compareSync(password, user.password)) {
-      return res.redirect('/login?error=Погрешно корисничко ime или lozinka');
+      return res.redirect('/login?error=Pogresno korisnicko ime ili lozinka');
     }
     req.session.user = { id: user.id, name: user.name, username: user.username, role: user.role };
     res.redirect(user.role === 'admin' ? '/admin' : '/driver');
-  } catch(e) { res.redirect('/login?error=Грешка при најава'); }
+  } catch(e) { res.redirect('/login?error=Greska pri najava'); }
 });
 
 router.post('/logout', (req, res) => { req.session.destroy(); res.redirect('/login'); });

@@ -103,6 +103,7 @@ input,select,textarea{font-family:var(--font)}
   background:var(--surface);display:flex;align-items:center;justify-content:space-between;
   position:sticky;top:0;z-index:10;
 }
+.mobile-menu-btn, .mobile-logout-form { display: none; }
 .admin-header h1{font-size:20px;font-weight:700}
 .admin-header .date-badge{background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:6px 14px;border-radius:20px;font-size:13px}
 .admin-content{padding:28px;flex:1}
@@ -377,6 +378,11 @@ tbody td strong{color:var(--text)}
 /* ── RESPONSIVE ─────────────────────────────────────────── */
 @media(max-width:768px){
   .sidebar{display:none}
+  .sidebar.show-mobile{display:flex; position:fixed; z-index:99; left:0; top:0; bottom:0; box-shadow:0 0 20px rgba(0,0,0,0.5);}
+  .mobile-menu-btn { display:block; background:none; border:none; color:var(--text); font-size:24px; cursor:pointer;}
+  .mobile-logout-form { display:block; margin:0;}
+  .hide-mobile { display:none !important; }
+  .admin-header { padding: 14px 16px; }
   .admin-content{padding:16px}
   .form-row.cols-2,.form-row.cols-3{grid-template-columns:1fr}
   .stats-grid{grid-template-columns:repeat(2,1fr)}

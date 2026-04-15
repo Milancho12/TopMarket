@@ -1,34 +1,38 @@
 <!DOCTYPE html>
 <html lang="mk">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Најава – ZitoLuks</title>
   <link rel="stylesheet" href="/css/style.css">
 </head>
+
 <body>
-<div class="login-page">
-  <div class="login-card">
-    <div class="login-logo">
-      <span class="bread-icon">🍞</span>
-      <h1>ZitoLuks</h1>
-      <p>Систем за дистрибуција на леб</p>
+  <div class="login-page">
+    <div class="login-card">
+      <div class="login-logo">
+        <span class="bread-icon">🍞</span>
+        <h1>ZitoLuks</h1>
+        <p>Систем за дистрибуција на леб</p>
+      </div>
+      <% if (error) { %>
+        <div class="login-error">⚠️ <%= error %>
+        </div>
+        <% } %>
+          <form method="POST" action="/login">
+            <div class="form-group">
+              <label>Korisnicko Ime</label>
+              <input type="text" name="username" placeholder="Vnesete korisnicko ime" required autofocus>
+            </div>
+            <div class="form-group">
+              <label>Lozinka</label>
+              <input type="password" name="password" placeholder="••••••••" required>
+            </div>
+            <button type="submit" class="btn-login">Najavi se →</button>
+          </form>
     </div>
-    <% if (error) { %>
-    <div class="login-error">⚠️ <%= error %></div>
-    <% } %>
-    <form method="POST" action="/login">
-      <div class="form-group">
-        <label>Корисничко Ime</label>
-        <input type="text" name="username" placeholder="Внесете корисничко ime" required autofocus>
-      </div>
-      <div class="form-group">
-        <label>Lozinka</label>
-        <input type="password" name="password" placeholder="••••••••" required>
-      </div>
-      <button type="submit" class="btn-login">Најави се →</button>
-    </form>
   </div>
-</div>
 </body>
+
 </html>
