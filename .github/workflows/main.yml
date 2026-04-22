@@ -1,0 +1,15 @@
+name: KIII Lab Workflow
+on: [push]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run a shell command
+        run: |
+          echo "Starting build process..."
+          ls -R
+          echo "Build complete."
