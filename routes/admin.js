@@ -342,7 +342,16 @@ router.get('/zito-report/excel', async (req, res) => {
     };
     const numStyle = { ...dataStyle, alignment: { horizontal: 'right', vertical: 'middle' } };
 
-    rows.forEach((r, idx) => {
+    let currentMarketId = null;
+    let rowIdx = 0; // Custom index to reset row shading per market
+
+    rows.forEach((r) => {
+      if (currentMarketId !== null && currentMarketId !== r.market_id) {
+        for (let i = 0; i < 5; i++) ws.addRow([]); // Insert 5 empty rows between markets
+        rowIdx = 0;
+      }
+      currentMarketId = r.market_id;
+
       const row = ws.addRow([
         DISTRIBUTER_CODE,
         dateStr,
@@ -364,10 +373,11 @@ router.get('/zito-report/excel', async (req, res) => {
       row.eachCell({ includeEmpty: true }, (cell, colNum) => {
         cell.style = colNum >= 10 ? numStyle : dataStyle;
         // Alternate row shading
-        if (idx % 2 === 1) {
+        if (rowIdx % 2 === 1) {
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F5F5' } };
         }
       });
+      rowIdx++;
     });
 
     if (rows.length === 0) {
