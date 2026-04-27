@@ -239,11 +239,12 @@ router.get('/zito-report/excel', async (req, res) => {
     if (!date_from || !date_to) return res.status(400).send('Датумите се задолжителни');
 
     let sql = `
-      SELECT d.date, m.id market_id, m.name market_name, m.city market_city, m.address market_address,
+      SELECT m.id market_id, m.name market_name, m.city market_city, m.address market_address,
              m.client_code, m.object_code,
              a.code art_code, a.name art_name, a.price,
-             di.delivered_qty, di.returned_qty,
-             (di.delivered_qty - di.returned_qty) net_qty
+             SUM(di.delivered_qty) delivered_qty,
+             SUM(di.returned_qty) returned_qty,
+             SUM(di.delivered_qty - di.returned_qty) net_qty
       FROM delivery_items di
       JOIN deliveries d ON d.id = di.delivery_id
       JOIN articles a ON a.id = di.article_id
@@ -252,9 +253,10 @@ router.get('/zito-report/excel', async (req, res) => {
     const params = [date_from, date_to];
     if (driver_id) { sql += ' AND d.driver_id=?'; params.push(driver_id); }
     if (market_id) { sql += ' AND d.market_id=?'; params.push(market_id); }
-    sql += ' ORDER BY d.date, m.name, a.sort_order';
+    sql += ' GROUP BY m.id, a.id HAVING net_qty > 0 ORDER BY m.name, a.sort_order';
 
     const rows = await db.allAsync(sql, params);
+    const dateStr = date_from === date_to ? date_from : `${date_from} do ${date_to}`;
 
     const wb = new ExcelJS.Workbook();
     wb.creator = 'ZitoLuks';
@@ -343,7 +345,7 @@ router.get('/zito-report/excel', async (req, res) => {
     rows.forEach((r, idx) => {
       const row = ws.addRow([
         DISTRIBUTER_CODE,
-        r.date,
+        dateStr,
         r.client_code || '',
         r.market_name || '',
         r.object_code || '',
