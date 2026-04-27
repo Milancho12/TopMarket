@@ -151,4 +151,106 @@ router.post('/market/:marketId', async (req, res) => {
   } catch(e) { res.json({ success: false, error: e.message }); }
 });
 
+// ── LOADING LIST (Товарен лист) ────────────────────────────────────────
+router.get('/loading-list', async (req, res) => {
+  try {
+    const driverId = req.session.user.id;
+    const date = req.query.date || today();
+    const articles = await db.allAsync('SELECT * FROM articles WHERE active=1 ORDER BY sort_order');
+    const loadingList = await db.getAsync('SELECT * FROM loading_lists WHERE driver_id=? AND date=?', [driverId, date]);
+
+    const itemsMap = {};
+    if (loadingList) {
+      const rows = await db.allAsync('SELECT * FROM loading_list_items WHERE loading_list_id=?', [loadingList.id]);
+      rows.forEach(r => { itemsMap[r.article_id] = r; });
+    }
+
+    // Pre-fill from previous day aggregate next_day_qty if no list yet
+    const nextDayMap = {};
+    if (!loadingList) {
+      const prev = new Date(date + 'T12:00:00');
+      prev.setDate(prev.getDate() - 1);
+      const prevDate = prev.toISOString().split('T')[0];
+      const nd = await db.allAsync(`
+        SELECT di.article_id, SUM(di.next_day_qty) total_qty
+        FROM delivery_items di JOIN deliveries d ON d.id=di.delivery_id
+        WHERE d.driver_id=? AND d.date=? AND di.next_day_qty>0
+        GROUP BY di.article_id`, [driverId, prevDate]);
+      nd.forEach(r => { nextDayMap[r.article_id] = r.total_qty; });
+    }
+
+    res.render('driver/loading-list', { date, articles, loadingList, itemsMap, nextDayMap });
+  } catch(e) { res.status(500).send(e.message); }
+});
+
+router.post('/loading-list', async (req, res) => {
+  try {
+    const driverId = req.session.user.id;
+    const date = req.query.date || today();
+    const now = new Date().toISOString();
+    const { notes, items } = req.body;
+
+    let ll = await db.getAsync('SELECT * FROM loading_lists WHERE driver_id=? AND date=?', [driverId, date]);
+    if (!ll) {
+      const r = await db.runAsync('INSERT INTO loading_lists (driver_id,date,submitted_at,notes) VALUES (?,?,?,?)', [driverId, date, now, notes||null]);
+      ll = { id: r.lastID };
+    } else {
+      await db.runAsync('UPDATE loading_lists SET submitted_at=?,notes=? WHERE id=?', [now, notes||null, ll.id]);
+    }
+
+    if (items && typeof items === 'object') {
+      for (const [aId, q] of Object.entries(items)) {
+        const loaded = parseInt(q.loaded) || 0;
+        await db.runAsync(
+          `INSERT INTO loading_list_items (loading_list_id,article_id,loaded_qty) VALUES (?,?,?)
+           ON CONFLICT(loading_list_id,article_id) DO UPDATE SET loaded_qty=excluded.loaded_qty`,
+          [ll.id, parseInt(aId), loaded]);
+      }
+    }
+    res.json({ success: true });
+  } catch(e) { res.json({ success: false, error: e.message }); }
+});
+
+// ── TOTAL RETURNS + BALANCE (Вкупно поврат) ────────────────────────────
+router.get('/total-returns', async (req, res) => {
+  try {
+    const driverId = req.session.user.id;
+    const date = req.query.date || today();
+
+    // Per-article aggregates across all markets
+    const items = await db.allAsync(`
+      SELECT a.id art_id, a.code, a.name, a.sort_order,
+             COALESCE(SUM(di.delivered_qty),0) total_delivered,
+             COALESCE(SUM(di.returned_qty),0)  total_returned,
+             COALESCE(SUM(di.delivered_qty - di.returned_qty),0) total_net
+      FROM delivery_items di
+      JOIN deliveries d ON d.id=di.delivery_id
+      JOIN articles a ON a.id=di.article_id
+      WHERE d.driver_id=? AND d.date=?
+      GROUP BY a.id ORDER BY a.sort_order`, [driverId, date]);
+
+    // Per-market returns breakdown
+    const byMarket = await db.allAsync(`
+      SELECT m.name market_name, a.code, a.name art_name,
+             di.returned_qty, di.delivered_qty
+      FROM delivery_items di
+      JOIN deliveries d ON d.id=di.delivery_id
+      JOIN articles a ON a.id=di.article_id
+      JOIN markets m ON m.id=d.market_id
+      WHERE d.driver_id=? AND d.date=? AND di.returned_qty>0
+      ORDER BY m.name, a.sort_order`, [driverId, date]);
+
+    // Loading list for balance
+    const loadingList = await db.getAsync('SELECT * FROM loading_lists WHERE driver_id=? AND date=?', [driverId, date]);
+    const loadedMap = {};
+    if (loadingList) {
+      const li = await db.allAsync('SELECT * FROM loading_list_items WHERE loading_list_id=?', [loadingList.id]);
+      li.forEach(r => { loadedMap[r.article_id] = r.loaded_qty; });
+    }
+
+    res.render('driver/total-returns', { date, items, byMarket, loadingList, loadedMap });
+  } catch(e) { res.status(500).send(e.message); }
+});
+
 module.exports = router;
+

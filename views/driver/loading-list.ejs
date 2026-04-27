@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="mk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+  <title>Товарен лист – ZitoLuks</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .ll-header {
+      background: linear-gradient(135deg, #0f4c81, #1565c0);
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .ll-header-info { flex: 1; }
+    .ll-header-info .lh-name { font-size: 17px; font-weight: 800; color: #fff; }
+    .ll-header-info .lh-date { font-size: 12px; color: #90caf9; margin-top: 2px; }
+    .ll-submitted-badge {
+      background: #10b98122; color: #10b981;
+      border: 1px solid #10b98140;
+      padding: 4px 12px; border-radius: 20px;
+      font-size: 12px; font-weight: 700;
+    }
+    .ll-btn-back {
+      background: none; border: 1px solid rgba(255,255,255,0.3);
+      color: rgba(255,255,255,0.8);
+      width: 36px; height: 36px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; cursor: pointer; flex-shrink: 0;
+      text-decoration: none;
+    }
+    .ll-btn-back:hover { background: rgba(255,255,255,0.15); color: #fff; }
+    .ll-info-banner {
+      background: linear-gradient(135deg, #1565c022, #1565c011);
+      border: 1px solid #1565c040;
+      border-radius: 10px;
+      margin: 12px 16px;
+      padding: 10px 14px;
+      font-size: 13px;
+      color: #1e3a5f;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .ll-art-field label { color: #0f4c81 !important; }
+    .ll-art-field input {
+      border-color: #1565c0 !important;
+      background: rgba(21,101,192,0.05) !important;
+    }
+    .ll-art-field input:focus {
+      box-shadow: 0 0 0 3px rgba(21,101,192,0.2) !important;
+      border-color: #1565c0 !important;
+    }
+    .ll-submit-area {
+      position: sticky; bottom: 0;
+      background: #f0f4ff; padding: 14px 16px;
+      box-shadow: 0 -4px 20px #0000001a;
+    }
+    .ll-btn-submit {
+      width: 100%;
+      background: linear-gradient(135deg, #0f4c81, #1565c0);
+      color: #fff;
+      font-size: 16px; font-weight: 800;
+      padding: 16px; border: none; border-radius: 14px;
+      cursor: pointer; transition: .2s; letter-spacing: .3px;
+    }
+    .ll-btn-submit:hover { transform: translateY(-1px); box-shadow: 0 4px 16px #1565c040; }
+    .ll-btn-submit:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+    .ll-btn-edit {
+      width: 100%; background: #fff; color: #1565c0;
+      border: 2px solid #1565c0;
+      font-size: 15px; font-weight: 700;
+      padding: 14px; border-radius: 14px;
+      cursor: pointer; transition: .2s;
+    }
+    .ll-btn-edit:hover { background: #e3f2fd; }
+  </style>
+</head>
+<body>
+<div class="driver-app">
+
+  <header class="ll-header">
+    <a href="/driver?date=<%= date %>" class="ll-btn-back">←</a>
+    <div class="ll-header-info">
+      <div class="lh-name">🚛 Товарен лист</div>
+      <div class="lh-date">📅 <%= new Date(date+'T12:00:00').toLocaleDateString('mk-MK',{weekday:'long',day:'numeric',month:'long'}) %></div>
+    </div>
+    <% if (loadingList && loadingList.submitted_at) { %>
+    <span class="ll-submitted-badge">✅ Зачувано</span>
+    <% } %>
+  </header>
+
+  <div class="ll-info-banner">
+    ℹ️ Внеси бројот на лебови натоварени на камион за овој ден.
+  </div>
+
+  <form id="ll-form">
+    <div class="articles-form" id="articles-list">
+      <% articles.forEach(a => { %>
+      <%
+        const existing = itemsMap[a.id] ? itemsMap[a.id].loaded_qty : (nextDayMap[a.id] || 0);
+      %>
+      <div class="article-row" id="llart-<%= a.id %>">
+        <div class="art-header" style="display:flex;align-items:center;margin-bottom:10px">
+          <span class="art-code"><%= a.code %></span>
+          <span class="art-name"><%= a.name %></span>
+        </div>
+        <div style="max-width:200px">
+          <div class="art-field ll-art-field">
+            <label>🚛 Натоварено</label>
+            <input type="number" id="ll-<%= a.id %>" name="items[<%= a.id %>][loaded]"
+              min="0" value="<%= existing %>" inputmode="numeric">
+          </div>
+        </div>
+      </div>
+      <% }) %>
+    </div>
+
+    <div class="notes-field" style="padding:0 16px;margin-bottom:8px;max-width:600px;margin-left:auto;margin-right:auto">
+      <label>💬 Забелешка (необврзно)</label>
+      <textarea id="ll-notes" placeholder="Внеси забелешка..."><%= loadingList ? (loadingList.notes||'') : '' %></textarea>
+    </div>
+
+    <div class="ll-submit-area">
+      <% if (loadingList && loadingList.submitted_at) { %>
+        <button type="button" id="ll-btn-edit" class="ll-btn-edit" onclick="enableEdit()">✏️ Измени товарен лист</button>
+        <button type="button" id="ll-btn-submit" class="ll-btn-submit" style="display:none;margin-top:8px" onclick="submitLL()">💾 Зачувај измени</button>
+      <% } else { %>
+        <button type="button" id="ll-btn-submit" class="ll-btn-submit" onclick="submitLL()">✅ Зачувај товарен лист</button>
+      <% } %>
+    </div>
+  </form>
+
+</div>
+<div id="toast-container"></div>
+<script>
+const articleIds = [<% articles.forEach((a,i) => { %><%= a.id %><%= i<articles.length-1?',':'' %><% }) %>];
+const isSubmitted = <%= loadingList && loadingList.submitted_at ? 'true' : 'false' %>;
+
+if (isSubmitted) lockInputs(true);
+
+function lockInputs(lock) {
+  articleIds.forEach(id => {
+    document.getElementById('ll-'+id).disabled = lock;
+  });
+  const n = document.getElementById('ll-notes');
+  if (n) n.disabled = lock;
+}
+
+function enableEdit() {
+  lockInputs(false);
+  document.getElementById('ll-btn-edit').style.display = 'none';
+  document.getElementById('ll-btn-submit').style.display = 'block';
+}
+
+async function submitLL() {
+  const btn = document.getElementById('ll-btn-submit');
+  btn.disabled = true;
+  btn.textContent = 'Се зачувува...';
+  const items = {};
+  articleIds.forEach(id => {
+    items[id] = { loaded: document.getElementById('ll-'+id).value || '0' };
+  });
+  try {
+    const res = await fetch('/driver/loading-list?date=<%= date %>', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ notes: document.getElementById('ll-notes').value, items })
+    });
+    const data = await res.json();
+    if (data.success) {
+      toast('Товарен лист зачуван! ✅', 'success');
+      setTimeout(() => window.location.href = '/driver?date=<%= date %>', 1200);
+    } else {
+      toast(data.error || 'Грешка!', 'error');
+      btn.disabled = false;
+      btn.textContent = '✅ Зачувај товарен лист';
+    }
+  } catch(e) {
+    toast('Грешка при поврзување!', 'error');
+    btn.disabled = false;
+    btn.textContent = '✅ Зачувај товарен лист';
+  }
+}
+
+function toast(msg, type='success') {
+  const t = document.createElement('div');
+  t.className = 'toast ' + type;
+  t.textContent = msg;
+  document.getElementById('toast-container').appendChild(t);
+  setTimeout(() => t.remove(), 3500);
+}
+</script>
+</body>
+</html>

@@ -3,6 +3,9 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const { db } = require('../database');
 const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = require('docx');
+const ExcelJS = require('exceljs');
+
+const DISTRIBUTER_CODE = '300189'; // може да се промени подоцна
 
 function today() { return new Date().toISOString().split('T')[0]; }
 
@@ -219,21 +222,179 @@ router.get('/invoices', async (req, res) => {
   res.render('admin/invoices', { markets, invoiceData, selMarket, filters: f });
 });
 
+// ── ZITO LUKS EXCEL REPORT ────────────────────────────────
+router.get('/zito-report', async (req, res) => {
+  try {
+    const t = today();
+    const drivers = await db.allAsync("SELECT id,name FROM users WHERE role='driver' ORDER BY name");
+    const markets = await db.allAsync('SELECT id,name FROM markets WHERE active=1 ORDER BY name');
+    const f = { date_from: req.query.date_from || t, date_to: req.query.date_to || t, driver_id: req.query.driver_id || '', market_id: req.query.market_id || '' };
+    res.render('admin/zito-report', { drivers, markets, filters: f });
+  } catch (e) { res.status(500).send(e.message); }
+});
+
+router.get('/zito-report/excel', async (req, res) => {
+  try {
+    const { date_from, date_to, driver_id, market_id } = req.query;
+    if (!date_from || !date_to) return res.status(400).send('Датумите се задолжителни');
+
+    let sql = `
+      SELECT d.date, m.id market_id, m.name market_name, m.city market_city, m.address market_address,
+             m.client_code, m.object_code,
+             a.code art_code, a.name art_name, a.price,
+             di.delivered_qty, di.returned_qty,
+             (di.delivered_qty - di.returned_qty) net_qty
+      FROM delivery_items di
+      JOIN deliveries d ON d.id = di.delivery_id
+      JOIN articles a ON a.id = di.article_id
+      JOIN markets m ON m.id = d.market_id
+      WHERE d.date>=? AND d.date<=?`;
+    const params = [date_from, date_to];
+    if (driver_id) { sql += ' AND d.driver_id=?'; params.push(driver_id); }
+    if (market_id) { sql += ' AND d.market_id=?'; params.push(market_id); }
+    sql += ' ORDER BY d.date, m.name, a.sort_order';
+
+    const rows = await db.allAsync(sql, params);
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'ZitoLuks';
+    const ws = wb.addWorksheet('ZitoLuks Извештај', { views: [{ state: 'frozen', ySplit: 2 }] });
+
+    // Column widths
+    ws.columns = [
+      { width: 14 }, // A  DISTRIBUTER
+      { width: 12 }, // B  DATUM
+      { width: 12 }, // C  KLIENT SIFRA
+      { width: 22 }, // D  KLIENT OPIS
+      { width: 12 }, // E  OBJEKT SIFRA
+      { width: 14 }, // F  OBJEKT GRAD
+      { width: 24 }, // G  OBJEKT ADRESA
+      { width: 14 }, // H  PROIZVOD SIFRA
+      { width: 28 }, // I  PROIZVOD OPIS
+      { width: 11 }, // J  BRUTO KOL
+      { width: 12 }, // K  VRATENO KOL
+      { width: 10 }, // L  NETO KOL
+      { width: 13 }, // M  BRUTO IZNOS
+      { width: 14 }, // N  VRATENO IZNOS
+      { width: 12 }, // O  NETO IZNOS
+    ];
+
+    // ── ROW 1: Group headers ──────────────────────────────
+    const row1 = ws.getRow(1);
+
+    // Color palette matching the image exactly
+    const C = {
+      orange:     'FFFFC000', // Sifra-distributer & Datum  (deep amber/orange)
+      clientBg:   'FFFF8C00', // Podatoci za klientot       (dark orange)
+      prodBg:     'FFFF6600', // Podatoci za Proizvod       (brick orange)
+      greenBg:    'FF00B050', // Kolicini                   (Excel green)
+      yellowBg:   'FFFFFF00', // Vrednost(Bez DDV)          (bright yellow)
+    };
+
+    const hStyle = (argbBg, argbFg = 'FF000000') => ({
+      font: { bold: true, color: { argb: argbFg }, size: 10 },
+      fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: argbBg } },
+      alignment: { horizontal: 'center', vertical: 'middle', wrapText: true },
+      border: {
+        top:    { style: 'medium', color: { argb: 'FF000000' } },
+        left:   { style: 'medium', color: { argb: 'FF000000' } },
+        bottom: { style: 'medium', color: { argb: 'FF000000' } },
+        right:  { style: 'medium', color: { argb: 'FF000000' } },
+      }
+    });
+
+    row1.height = 30;
+    ws.mergeCells('A1:A2'); ws.getCell('A1').value = 'Sifra-distributer';
+    Object.assign(ws.getCell('A1'), hStyle(C.orange));
+    ws.mergeCells('B1:B2'); ws.getCell('B1').value = 'Datum';
+    Object.assign(ws.getCell('B1'), hStyle(C.orange));
+    ws.mergeCells('C1:G1'); ws.getCell('C1').value = 'Podatoci za klientot i objektot';
+    Object.assign(ws.getCell('C1'), hStyle(C.clientBg));
+    ws.mergeCells('H1:I1'); ws.getCell('H1').value = 'Podatoci za Proizvod';
+    Object.assign(ws.getCell('H1'), hStyle(C.prodBg, 'FFFFFFFF'));
+    ws.mergeCells('J1:L1'); ws.getCell('J1').value = 'Kolicini';
+    Object.assign(ws.getCell('J1'), hStyle(C.greenBg, 'FFFFFFFF'));
+    ws.mergeCells('M1:O1'); ws.getCell('M1').value = 'Vrednost(Bez DDV)';
+    Object.assign(ws.getCell('M1'), hStyle(C.yellowBg));
+
+    // ── ROW 2: Column names ───────────────────────────────
+    const row2 = ws.getRow(2);
+    row2.height = 34;
+    const cols   = ['DISTRIBUTER','DATUM','KLIENT SIFRA','KLIENT OPIS','OBJEKT SIFRA','OBJEKT GRAD','OBJEKT ADRESA',
+                    'PROIZVOD SIFRA','PROIZVOD OPIS','BRUTO KOL','VRATENO KOL','NETO KOL','BRUTO IZNOS','VRATENO IZNOS','NETO IZNOS'];
+    const colBgs = [C.orange,C.orange,C.clientBg,C.clientBg,C.clientBg,C.clientBg,C.clientBg,
+                    C.prodBg,C.prodBg,C.greenBg,C.greenBg,C.greenBg,C.yellowBg,C.yellowBg,C.yellowBg];
+    const colFgs = ['FF000000','FF000000','FF000000','FF000000','FF000000','FF000000','FF000000',
+                    'FFFFFFFF','FFFFFFFF','FFFFFFFF','FFFFFFFF','FFFFFFFF','FF000000','FF000000','FF000000'];
+    cols.forEach((name, i) => {
+      const cell = row2.getCell(i + 1);
+      cell.value = name;
+      cell.style = hStyle(colBgs[i], colFgs[i]);
+    });
+
+    // ── DATA ROWS ─────────────────────────────────────────
+    const dataStyle = {
+      font: { size: 10 },
+      border: { top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} },
+      alignment: { vertical: 'middle' }
+    };
+    const numStyle = { ...dataStyle, alignment: { horizontal: 'right', vertical: 'middle' } };
+
+    rows.forEach((r, idx) => {
+      const row = ws.addRow([
+        DISTRIBUTER_CODE,
+        r.date,
+        r.client_code || '',
+        r.market_name || '',
+        r.object_code || '',
+        r.market_city || '',
+        r.market_address || '',
+        r.art_code,
+        r.art_name,
+        r.delivered_qty,
+        r.returned_qty,
+        r.net_qty,
+        parseFloat((r.delivered_qty * r.price).toFixed(2)),
+        parseFloat((r.returned_qty * r.price).toFixed(2)),
+        parseFloat((r.net_qty * r.price).toFixed(2)),
+      ]);
+      row.height = 18;
+      row.eachCell({ includeEmpty: true }, (cell, colNum) => {
+        cell.style = colNum >= 10 ? numStyle : dataStyle;
+        // Alternate row shading
+        if (idx % 2 === 1) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F5F5' } };
+        }
+      });
+    });
+
+    if (rows.length === 0) {
+      ws.addRow(['Нема податоци за избраниот период']);
+    }
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="ZitoLuks_${date_from}_${date_to}.xlsx"`);
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (e) { console.error(e); res.status(500).send(e.message); }
+});
+
+
 // ── API: MARKETS ──────────────────────────────────────────
 
 router.post('/api/markets', async (req, res) => {
   try {
-    const { name, address, contact_name, contact_phone } = req.body;
+    const { name, address, city, contact_name, contact_phone, client_code, object_code } = req.body;
     if (!name) return res.json({ success: false, error: 'Назив е задолжителен' });
-    const r = await db.runAsync('INSERT INTO markets (name,address,contact_name,contact_phone) VALUES (?,?,?,?)', [name, address || null, contact_name || null, contact_phone || null]);
+    const r = await db.runAsync('INSERT INTO markets (name,address,city,contact_name,contact_phone,client_code,object_code) VALUES (?,?,?,?,?,?,?)', [name, address || null, city || null, contact_name || null, contact_phone || null, client_code || null, object_code || null]);
     res.json({ success: true, id: r.lastID });
   } catch (e) { res.json({ success: false, error: e.message }); }
 });
 
 router.put('/api/markets/:id', async (req, res) => {
   try {
-    const { name, address, contact_name, contact_phone } = req.body;
-    await db.runAsync('UPDATE markets SET name=?,address=?,contact_name=?,contact_phone=? WHERE id=?', [name, address || null, contact_name || null, contact_phone || null, req.params.id]);
+    const { name, address, city, contact_name, contact_phone, client_code, object_code } = req.body;
+    await db.runAsync('UPDATE markets SET name=?,address=?,city=?,contact_name=?,contact_phone=?,client_code=?,object_code=? WHERE id=?', [name, address || null, city || null, contact_name || null, contact_phone || null, client_code || null, object_code || null, req.params.id]);
     res.json({ success: true });
   } catch (e) { res.json({ success: false, error: e.message }); }
 });

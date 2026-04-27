@@ -1,0 +1,69 @@
+<%- include('_header', { title: 'ZitoLuks Извештај', page: 'zito-report', user }) %>
+
+<div class="filter-row">
+  <form method="GET" action="/admin/zito-report" style="display:contents">
+    <div class="field">
+      <label>📅 Од датум</label>
+      <input type="date" name="date_from" value="<%= filters.date_from %>">
+    </div>
+    <div class="field">
+      <label>📅 До датум</label>
+      <input type="date" name="date_to" value="<%= filters.date_to %>">
+    </div>
+    <div class="field">
+      <label>🚗 Возач (опционално)</label>
+      <select name="driver_id">
+        <option value="">— Сите возачи —</option>
+        <% drivers.forEach(d => { %>
+        <option value="<%= d.id %>" <%= filters.driver_id==d.id?'selected':'' %>><%= d.name %></option>
+        <% }) %>
+      </select>
+    </div>
+    <div class="field">
+      <label>🏪 Маркет (опционално)</label>
+      <select name="market_id">
+        <option value="">— Сите маркети —</option>
+        <% markets.forEach(m => { %>
+        <option value="<%= m.id %>" <%= filters.market_id==m.id?'selected':'' %>><%= m.name %></option>
+        <% }) %>
+      </select>
+    </div>
+    <div class="field" style="align-self:flex-end">
+      <button type="submit" class="btn btn-primary">🔍 Прикажи</button>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">📊 ZitoLuks Извештај</span>
+    <div style="display:flex;gap:10px;align-items:center">
+      <span style="font-size:13px;color:var(--text3)">
+        <%= filters.date_from %> → <%= filters.date_to %>
+        <% if (filters.driver_id) { %> · Возач филтер активен<% } %>
+      </span>
+      <a href="/admin/zito-report/excel?date_from=<%= filters.date_from %>&date_to=<%= filters.date_to %>&driver_id=<%= filters.driver_id %>&market_id=<%= filters.market_id %>"
+         class="btn btn-success">
+        ⬇️ Преземи Excel (.xlsx)
+      </a>
+    </div>
+  </div>
+  <div class="card-body">
+    <div style="display:flex;gap:16px;flex-wrap:wrap">
+      <div style="flex:1;min-width:200px;background:var(--info-dim);border:1px solid #3b82f640;border-radius:10px;padding:14px">
+        <div style="font-size:12px;color:var(--info);font-weight:700;margin-bottom:6px">ℹ️ Содржина на Excel фајлот</div>
+        <div style="font-size:13px;color:var(--text2);line-height:1.7">
+          Фајлот содржи 15 колони: <strong>DISTRIBUTER · DATUM · KLIENT SIFRA · KLIENT OPIS · OBJEKT SIFRA · OBJEKT GRAD · OBJEKT ADRESA · PROIZVOD SIFRA · PROIZVOD OPIS · BRUTO KOL · VRATENO KOL · NETO KOL · BRUTO IZNOS · VRATENO IZNOS · NETO IZNOS</strong>
+        </div>
+      </div>
+      <div style="flex:1;min-width:200px;background:var(--success-dim);border:1px solid #10b98140;border-radius:10px;padding:14px">
+        <div style="font-size:12px;color:var(--success);font-weight:700;margin-bottom:6px">✅ Напомена</div>
+        <div style="font-size:13px;color:var(--text2);line-height:1.7">
+          Полето <strong>Град</strong> (OBJEKT GRAD) се внесува при додавање или уредување на маркет во делот <strong>Пазари</strong>.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<%- include('_footer') %>

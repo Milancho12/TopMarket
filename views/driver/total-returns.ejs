@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="mk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+  <title>Вкупно поврат – ZitoLuks</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .tr-header {
+      background: linear-gradient(135deg, #7f1d1d, #b91c1c);
+      padding: 14px 16px; display: flex; align-items: center; gap: 12px;
+      position: sticky; top: 0; z-index: 10;
+    }
+    .tr-btn-back {
+      background: none; border: 1px solid rgba(255,255,255,0.3);
+      color: rgba(255,255,255,0.8); width: 36px; height: 36px;
+      border-radius: 10px; display: flex; align-items: center;
+      justify-content: center; font-size: 18px; text-decoration: none; flex-shrink: 0;
+    }
+    .tr-btn-back:hover { background: rgba(255,255,255,0.15); color: #fff; }
+    .tr-header-info { flex: 1; }
+    .tr-header-info .th-name { font-size: 17px; font-weight: 800; color: #fff; }
+    .tr-header-info .th-date { font-size: 12px; color: #fca5a5; margin-top: 2px; }
+
+    .tr-tabs {
+      display: flex; background: #fff;
+      border-bottom: 2px solid #f1f5f9;
+      position: sticky; top: 64px; z-index: 9;
+    }
+    .tr-tab {
+      flex: 1; padding: 12px 8px; text-align: center;
+      font-size: 13px; font-weight: 700; color: #94a3b8;
+      border: none; background: none; cursor: pointer;
+      border-bottom: 3px solid transparent; transition: .2s;
+    }
+    .tr-tab.active { color: #b91c1c; border-bottom-color: #b91c1c; }
+
+    .tr-section { padding: 16px; display: none; }
+    .tr-section.active { display: block; }
+
+    .tr-card {
+      background: #fff; border-radius: 14px; overflow: hidden;
+      box-shadow: 0 2px 8px #0000000e; margin-bottom: 16px;
+    }
+    .tr-card-header {
+      padding: 13px 16px; border-bottom: 1px solid #f1f5f9;
+      font-weight: 700; font-size: 14px;
+      display: flex; align-items: center; gap: 8px;
+      background: #fafafa;
+    }
+    .tr-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    .tr-table th {
+      text-align: left; padding: 9px 14px;
+      font-size: 11px; color: #94a3b8; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .5px;
+      border-bottom: 1px solid #f1f5f9;
+    }
+    .tr-table td { padding: 11px 14px; border-bottom: 1px solid #f8fafc; }
+    .tr-table tr:last-child td { border-bottom: none; }
+    .tr-table td.num { text-align: right; font-weight: 700; font-size: 16px; }
+    .tr-table td.num.red { color: #ef4444; }
+    .tr-table td.num.green { color: #10b981; }
+    .tr-table td.num.blue { color: #3b82f6; }
+    .code-badge {
+      background: #f1f5f9; color: #64748b;
+      font-size: 11px; font-weight: 700;
+      padding: 2px 7px; border-radius: 5px; margin-right: 6px;
+    }
+    .market-group-title {
+      font-size: 12px; font-weight: 700; color: #64748b;
+      text-transform: uppercase; letter-spacing: .6px;
+      padding: 10px 14px 4px; background: #f8fafc;
+      border-bottom: 1px solid #f1f5f9;
+    }
+
+    /* Balance section */
+    .bal-row { display: flex; align-items: center; gap: 0; }
+    .bal-ok { color: #10b981; font-weight: 800; }
+    .bal-miss { color: #ef4444; font-weight: 800; }
+    .bal-summary {
+      margin: 0 16px 16px; padding: 16px;
+      border-radius: 14px; display: flex; align-items: center; gap: 14px;
+    }
+    .bal-summary.ok { background: linear-gradient(135deg,#f0fdf4,#dcfce7); border: 2px solid #10b98140; }
+    .bal-summary.missing { background: linear-gradient(135deg,#fef2f2,#fee2e2); border: 2px solid #ef444440; }
+    .bal-summary .bi { font-size: 36px; }
+    .bal-summary .bt { font-size: 15px; font-weight: 800; }
+    .bal-summary .bs { font-size: 12px; color: #64748b; margin-top: 3px; }
+    .no-ll-banner {
+      margin: 16px; padding: 16px; background: #fff7ed;
+      border: 2px dashed #f59e0b80; border-radius: 14px;
+      text-align: center; color: #92400e;
+    }
+    .no-ll-banner a {
+      display: inline-block; margin-top: 10px;
+      background: linear-gradient(135deg,#0f4c81,#1565c0);
+      color: #fff; padding: 10px 20px; border-radius: 10px;
+      font-weight: 700; font-size: 14px; text-decoration: none;
+    }
+    .empty-returns {
+      text-align: center; padding: 48px 20px; color: #94a3b8;
+    }
+    .empty-returns .big { font-size: 40px; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+<div class="driver-app">
+
+  <header class="tr-header">
+    <a href="/driver?date=<%= date %>" class="tr-btn-back">←</a>
+    <div class="tr-header-info">
+      <div class="th-name">📊 Поврат и биланс</div>
+      <div class="th-date">📅 <%= new Date(date+'T12:00:00').toLocaleDateString('mk-MK',{weekday:'long',day:'numeric',month:'long'}) %></div>
+    </div>
+  </header>
+
+  <!-- Tabs -->
+  <div class="tr-tabs">
+    <button class="tr-tab active" onclick="showTab('returns',this)" id="tab-returns">↩️ Вкупно поврат</button>
+    <button class="tr-tab" onclick="showTab('balance',this)" id="tab-balance">⚖️ Биланс</button>
+  </div>
+
+  <!-- ═══ TAB: RETURNS ═══ -->
+  <div class="tr-section active" id="sec-returns">
+
+    <% if (items.length === 0) { %>
+    <div class="empty-returns">
+      <div class="big">📭</div>
+      <div style="font-weight:700">Нема испораки за <%= date %></div>
+      <div style="font-size:13px;margin-top:4px">Внеси испораки на страниците на маркетите</div>
+    </div>
+    <% } else { %>
+
+    <!-- Per-article summary -->
+    <div class="tr-card">
+      <div class="tr-card-header">↩️ Поврат по артикл</div>
+      <table class="tr-table">
+        <thead>
+          <tr>
+            <th>Артикл</th>
+            <th style="text-align:right">Испор.</th>
+            <th style="text-align:right">Поврат</th>
+            <th style="text-align:right">Нето</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% items.forEach(item => { %>
+          <% if (item.total_delivered > 0 || item.total_returned > 0) { %>
+          <tr>
+            <td>
+              <span class="code-badge"><%= item.code %></span>
+              <span style="font-size:13px;color:#1e293b"><%= item.name %></span>
+            </td>
+            <td class="num blue"><%= item.total_delivered %></td>
+            <td class="num red"><%= item.total_returned %></td>
+            <td class="num green"><%= item.total_net %></td>
+          </tr>
+          <% } %>
+          <% }) %>
+          <tr style="background:#f8fafc">
+            <td style="font-weight:700;font-size:13px">Вкупно</td>
+            <td class="num blue"><%= items.reduce((s,i)=>s+i.total_delivered,0) %></td>
+            <td class="num red"><%= items.reduce((s,i)=>s+i.total_returned,0) %></td>
+            <td class="num green"><%= items.reduce((s,i)=>s+i.total_net,0) %></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Per-market breakdown -->
+    <% if (byMarket.length > 0) { %>
+    <div class="tr-card">
+      <div class="tr-card-header">🏪 Поврат по маркет</div>
+      <%
+        const mkts = {};
+        byMarket.forEach(r => {
+          if (!mkts[r.market_name]) mkts[r.market_name] = [];
+          mkts[r.market_name].push(r);
+        });
+      %>
+      <% Object.entries(mkts).forEach(([mname, rows]) => { %>
+      <div class="market-group-title">🏪 <%= mname %></div>
+      <% rows.forEach(r => { %>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #f8fafc">
+        <span>
+          <span class="code-badge"><%= r.code %></span>
+          <span style="font-size:13px;color:#1e293b"><%= r.art_name %></span>
+        </span>
+        <span style="color:#ef4444;font-weight:800;font-size:16px">↩ <%= r.returned_qty %></span>
+      </div>
+      <% }) %>
+      <% }) %>
+    </div>
+    <% } %>
+
+    <% } %>
+    <div style="height:32px"></div>
+  </div>
+
+  <!-- ═══ TAB: BALANCE ═══ -->
+  <div class="tr-section" id="sec-balance">
+
+    <% if (!loadingList) { %>
+    <div class="no-ll-banner">
+      <div style="font-size:24px;margin-bottom:8px">🚛</div>
+      <div style="font-weight:700;font-size:15px">Товарниот лист не е внесен</div>
+      <div style="font-size:13px;margin-top:4px">За да се пресмета биланс, прво внеси го товарниот лист.</div>
+      <a href="/driver/loading-list?date=<%= date %>">➕ Внеси товарен лист</a>
+    </div>
+    <% } else { %>
+
+    <%
+      let totalLoaded = 0, totalNet = 0, totalReturned = 0, totalDiff = 0;
+      const balRows = [];
+      items.forEach(item => {
+        const loaded = loadedMap[item.art_id] || 0;
+        const net    = item.total_net;
+        const ret    = item.total_returned;
+        const diff   = loaded - net - ret;
+        if (loaded > 0 || net > 0 || ret > 0) {
+          balRows.push({ ...item, loaded, net, ret, diff });
+          totalLoaded   += loaded;
+          totalNet      += net;
+          totalReturned += ret;
+          totalDiff     += diff;
+        }
+      });
+    %>
+
+    <!-- Summary banner -->
+    <div class="bal-summary <%= totalDiff === 0 ? 'ok' : 'missing' %>">
+      <div class="bi"><%= totalDiff === 0 ? '✅' : '⚠️' %></div>
+      <div>
+        <div class="bt">
+          <% if (totalDiff === 0) { %>Биланс е во ред!
+          <% } else if (totalDiff > 0) { %>Недостасуваат <%= totalDiff %> леб(ови)!
+          <% } else { %>Вишок <%= Math.abs(totalDiff) %> леб(ови) — проверете ги бројките
+          <% } %>
+        </div>
+        <div class="bs">Натоварено: <%= totalLoaded %> | Нето: <%= totalNet %> | Поврат: <%= totalReturned %></div>
+      </div>
+    </div>
+
+    <!-- Per-article balance table -->
+    <% if (balRows.length > 0) { %>
+    <div class="tr-card">
+      <div class="tr-card-header">⚖️ Детален биланс по артикл</div>
+      <table class="tr-table">
+        <thead>
+          <tr>
+            <th>Артикл</th>
+            <th style="text-align:right">Натов.</th>
+            <th style="text-align:right">Нето</th>
+            <th style="text-align:right">Повр.</th>
+            <th style="text-align:right">Разл.</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% balRows.forEach(r => { %>
+          <tr style="<%= r.diff !== 0 ? 'background:#fef2f2' : '' %>">
+            <td>
+              <span class="code-badge"><%= r.code %></span>
+              <span style="font-size:12px;color:#1e293b"><%= r.name %></span>
+            </td>
+            <td class="num blue"><%= r.loaded %></td>
+            <td class="num green"><%= r.net %></td>
+            <td class="num red"><%= r.ret %></td>
+            <td class="num <%= r.diff === 0 ? 'green' : 'red' %>">
+              <%= r.diff === 0 ? '✓' : (r.diff > 0 ? '-'+r.diff : '+'+Math.abs(r.diff)) %>
+            </td>
+          </tr>
+          <% }) %>
+          <tr style="background:#f8fafc;font-weight:700">
+            <td style="font-size:13px">Вкупно</td>
+            <td class="num blue"><%= totalLoaded %></td>
+            <td class="num green"><%= totalNet %></td>
+            <td class="num red"><%= totalReturned %></td>
+            <td class="num <%= totalDiff===0?'green':'red' %>"><%= totalDiff===0?'✓':(totalDiff>0?'-'+totalDiff:'+'+Math.abs(totalDiff)) %></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <% } else { %>
+    <div class="empty-returns">
+      <div class="big">📭</div>
+      <div style="font-weight:700">Нема испораки за <%= date %></div>
+    </div>
+    <% } %>
+
+    <% } %>
+    <div style="height:32px"></div>
+  </div>
+
+</div>
+<script>
+function showTab(name, el) {
+  document.querySelectorAll('.tr-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tr-section').forEach(s => s.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('sec-' + name).classList.add('active');
+}
+// Auto-open balance tab if ?tab=balance
+if (new URLSearchParams(location.search).get('tab') === 'balance') {
+  showTab('balance', document.getElementById('tab-balance'));
+}
+</script>
+</body>
+</html>

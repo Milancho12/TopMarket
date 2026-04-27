@@ -11,14 +11,16 @@
     <div class="empty"><div class="empty-icon">🏪</div><p>Нема додадени пазари</p></div>
     <% } else { %>
     <table id="markets-table">
-      <thead><tr><th>#</th><th>Назив</th><th>Адреса</th><th>Контакт</th><th>Телефон</th><th>Акции</th></tr></thead>
+      <thead><tr><th>#</th><th>Назив (Опис)</th><th>Шифра Клиент</th><th>Шифра Објект</th><th>Град</th><th>Адреса</th><th>Телефон</th><th>Акции</th></tr></thead>
       <tbody>
       <% markets.forEach((m,i) => { %>
         <tr id="row-<%= m.id %>">
           <td style="color:var(--text3)"><%= i+1 %></td>
           <td><strong><%= m.name %></strong></td>
+          <td><%= m.client_code || '—' %></td>
+          <td><%= m.object_code || '—' %></td>
+          <td><%= m.city || '—' %></td>
           <td><%= m.address || '—' %></td>
-          <td><%= m.contact_name || '—' %></td>
           <td><%= m.contact_phone || '—' %></td>
           <td>
             <div class="btn-group">
@@ -39,8 +41,9 @@
   <div class="modal">
     <div class="modal-header"><h3>Додај пазар</h3><button class="modal-close" onclick="closeModal('modal-add')">✕</button></div>
     <div class="modal-body">
-      <div class="form-row cols-2"><div class="field"><label>Назив *</label><input id="add-name" placeholder="Маркет Центар"></div><div class="field"><label>Адреса</label><input id="add-addr" placeholder="ул. ..."></div></div>
-      <div class="form-row cols-2"><div class="field"><label>Контакт лице</label><input id="add-contact"></div><div class="field"><label>Телефон</label><input id="add-phone" type="tel"></div></div>
+      <div class="form-row cols-2"><div class="field"><label>Назив (Опис) *</label><input id="add-name" placeholder="Маркет Центар"></div><div class="field"><label>Шифра на Клиент</label><input id="add-client-code"></div></div>
+      <div class="form-row cols-2"><div class="field"><label>Шифра на Објект</label><input id="add-object-code"></div><div class="field"><label>Град</label><input id="add-city" value="KUMANOVO"></div></div>
+      <div class="form-row cols-2"><div class="field"><label>Адреса</label><input id="add-addr" placeholder="ул. ..."></div><div class="field"><label>Телефон</label><input id="add-phone" type="tel"></div></div>
     </div>
     <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('modal-add')">Откажи</button><button class="btn btn-primary" onclick="addMarket()">Зачувај</button></div>
   </div>
@@ -52,8 +55,9 @@
     <div class="modal-header"><h3>Уреди пазар</h3><button class="modal-close" onclick="closeModal('modal-edit')">✕</button></div>
     <div class="modal-body">
       <input type="hidden" id="edit-id">
-      <div class="form-row cols-2"><div class="field"><label>Назив *</label><input id="edit-name"></div><div class="field"><label>Адреса</label><input id="edit-addr"></div></div>
-      <div class="form-row cols-2"><div class="field"><label>Контакт лице</label><input id="edit-contact"></div><div class="field"><label>Телефон</label><input id="edit-phone" type="tel"></div></div>
+      <div class="form-row cols-2"><div class="field"><label>Назив (Опис) *</label><input id="edit-name"></div><div class="field"><label>Шифра на Клиент</label><input id="edit-client-code"></div></div>
+      <div class="form-row cols-2"><div class="field"><label>Шифра на Објект</label><input id="edit-object-code"></div><div class="field"><label>Град</label><input id="edit-city"></div></div>
+      <div class="form-row cols-2"><div class="field"><label>Адреса</label><input id="edit-addr"></div><div class="field"><label>Телефон</label><input id="edit-phone" type="tel"></div></div>
     </div>
     <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('modal-edit')">Откажи</button><button class="btn btn-primary" onclick="updateMarket()">Зачувај</button></div>
   </div>
@@ -61,21 +65,23 @@
 
 <script>
 async function addMarket() {
-  const r = await fetch('/admin/api/markets',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:document.getElementById('add-name').value,address:document.getElementById('add-addr').value,contact_name:document.getElementById('add-contact').value,contact_phone:document.getElementById('add-phone').value})});
+  const r = await fetch('/admin/api/markets',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:document.getElementById('add-name').value,address:document.getElementById('add-addr').value,city:document.getElementById('add-city').value,client_code:document.getElementById('add-client-code').value,object_code:document.getElementById('add-object-code').value,contact_phone:document.getElementById('add-phone').value})});
   const d = await r.json();
   if(d.success){toast('Пазарот е додаден!');setTimeout(()=>location.reload(),800)}else toast(d.error,'error');
 }
 function editMarket(m) {
   document.getElementById('edit-id').value=m.id;
   document.getElementById('edit-name').value=m.name||'';
+  document.getElementById('edit-client-code').value=m.client_code||'';
+  document.getElementById('edit-object-code').value=m.object_code||'';
+  document.getElementById('edit-city').value=m.city||'';
   document.getElementById('edit-addr').value=m.address||'';
-  document.getElementById('edit-contact').value=m.contact_name||'';
   document.getElementById('edit-phone').value=m.contact_phone||'';
   openModal('modal-edit');
 }
 async function updateMarket() {
   const id=document.getElementById('edit-id').value;
-  const r=await fetch('/admin/api/markets/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:document.getElementById('edit-name').value,address:document.getElementById('edit-addr').value,contact_name:document.getElementById('edit-contact').value,contact_phone:document.getElementById('edit-phone').value})});
+  const r=await fetch('/admin/api/markets/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:document.getElementById('edit-name').value,address:document.getElementById('edit-addr').value,city:document.getElementById('edit-city').value,client_code:document.getElementById('edit-client-code').value,object_code:document.getElementById('edit-object-code').value,contact_phone:document.getElementById('edit-phone').value})});
   const d=await r.json();
   if(d.success){toast('Зачувано!');setTimeout(()=>location.reload(),800)}else toast(d.error,'error');
 }
