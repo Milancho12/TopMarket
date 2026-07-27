@@ -11,6 +11,10 @@ COPY package*.json ./
 
 # Install npm dependencies and force rebuild sqlite3 from source to fix GLIBC issues
 RUN npm install && npm rebuild sqlite3 --build-from-source
+
+# Create a symlink for the bundled Chrome to bypass Puppeteer version checks
+RUN ln -s $(find /home/pptruser/.cache/puppeteer/chrome -name "chrome" -type f | head -n 1) /usr/bin/google-chrome-stable
+
 # Copy all other files
 COPY . .
 

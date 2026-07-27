@@ -9,6 +9,6 @@ services:
     environment:
       - NODE_ENV=production
       - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-      - PUPPETEER_CACHE_DIR=/home/pptruser/.cache/puppeteer
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
     volumes:
       - ./zitoLuks.db:/app/zitoLuks.db
