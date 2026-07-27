@@ -3,6 +3,9 @@ const { db } = require('../database');
 
 function today() { return new Date().toISOString().split('T')[0]; }
 
+// Global lock to prevent concurrent Puppeteer instances
+let isRunning = false;
+
 // Normalize whitespace/newlines for flexible comparison
 function normalizeText(str) {
   return (str || '').replace(/[\r\n\t ]+/g, ' ').trim().toLowerCase();
@@ -37,6 +40,13 @@ async function submitOrdersForAccount(account) {
   }
 
   console.log(`Account ${account.username}: Pronadjeni narachki za ${driverTasks.length} vozachi.`);
+
+  // Check if already running
+  if (isRunning) {
+    console.warn(`Account ${account.username}: Puppeteer e veke aktiven (drug process raboti). Se preskacuva.`);
+    return;
+  }
+  isRunning = true;
 
   const isWindows = process.platform === 'win32';
   
@@ -174,6 +184,7 @@ async function submitOrdersForAccount(account) {
     await new Promise(r => setTimeout(r, 10000));
   } finally {
     await browser.close();
+    isRunning = false;
   }
 }
 
