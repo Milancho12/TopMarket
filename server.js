@@ -2,6 +2,7 @@ const express = require('express');
 const session = require('express-session');
 const path = require('path');
 const { db, init } = require('./database');
+const { initScheduler } = require('./services/scheduler');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -42,6 +43,7 @@ app.get('/', (req, res) => {
 
 // Init DB then start server
 init().then(() => {
+  initScheduler(); // Start the automated order submitter cron
   app.listen(PORT, () => {
     console.log(`\n🍞 ZitoLuks работи на: http://localhost:${PORT}\n`);
   });

@@ -41,18 +41,11 @@
         <button class="btn btn-sm btn-primary no-print" onclick="downloadWord()">📄 Word документ</button>
       </div>
     </div>
-    <% if (deliveries.length > 0) { 
-      let g_del = 0, g_ret = 0, g_net = 0;
-      deliveries.forEach(d => {
-        g_del += d.tot_del;
-        g_ret += d.tot_ret;
-        g_net += (d.tot_del - d.tot_ret);
-      });
-    %>
+    <% if (totals && (totals.g_del > 0 || totals.g_ret > 0 || deliveries.length > 0)) { %>
     <div style="padding: 16px; background: var(--surface2); border-bottom: 1px solid var(--border); display: flex; gap: 24px; font-size: 14px;">
-      <div><strong>Вкупно Испорачано:</strong> <span class="badge badge-info"><%= g_del %></span></div>
-      <div><strong>Вкупно Вратено:</strong> <span class="badge badge-danger"><%= g_ret %></span></div>
-      <div><strong>Вкупно Нето:</strong> <span class="badge badge-success"><%= g_net %></span></div>
+      <div><strong>Вкупно Испорачано:</strong> <span class="badge badge-info"><%= totals.g_del %></span></div>
+      <div><strong>Вкупно Вратено:</strong> <span class="badge badge-danger"><%= totals.g_ret %></span></div>
+      <div><strong>Вкупно Нето:</strong> <span class="badge badge-success"><%= totals.g_del - totals.g_ret %></span></div>
     </div>
     <% } %>
     <div class="table-wrap">

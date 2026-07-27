@@ -81,7 +81,7 @@ router.get('/articles', async (req, res) => {
 });
 
 router.get('/drivers', async (req, res) => {
-  const drivers = await db.allAsync("SELECT id,name,username,phone,active FROM users WHERE role='driver' ORDER BY name");
+  const drivers = await db.allAsync("SELECT id,name,username,phone,active,portal_username,portal_password,portal_column_id FROM users WHERE role='driver' ORDER BY name");
   const markets = await db.allAsync('SELECT id,name FROM markets WHERE active=1 ORDER BY name');
   res.render('admin/drivers', { drivers, markets });
 });
@@ -108,15 +108,23 @@ router.get('/reports', async (req, res) => {
            COALESCE(SUM(di.delivered_qty),0) tot_del, COALESCE(SUM(di.returned_qty),0) tot_ret
     FROM deliveries d JOIN users u ON u.id=d.driver_id JOIN markets m ON m.id=d.market_id
     LEFT JOIN delivery_items di ON di.delivery_id=d.id WHERE 1=1`;
+  
+  let tQ = `SELECT COALESCE(SUM(di.delivered_qty),0) g_del, COALESCE(SUM(di.returned_qty),0) g_ret
+            FROM deliveries d JOIN markets m ON m.id=d.market_id
+            LEFT JOIN delivery_items di ON di.delivery_id=d.id WHERE 1=1`;
+  
   const params = [];
-  if (f.date_from) { q += ' AND d.date>=?'; params.push(f.date_from); }
-  if (f.date_to) { q += ' AND d.date<=?'; params.push(f.date_to); }
-  if (f.driver_id) { q += ' AND d.driver_id=?'; params.push(f.driver_id); }
-  if (f.market_id) { q += ' AND d.market_id=?'; params.push(f.market_id); }
-  if (f.company_id) { q += ' AND m.company_id=?'; params.push(f.company_id); }
+  if (f.date_from) { q += ' AND d.date>=?'; tQ += ' AND d.date>=?'; params.push(f.date_from); }
+  if (f.date_to) { q += ' AND d.date<=?'; tQ += ' AND d.date<=?'; params.push(f.date_to); }
+  if (f.driver_id) { q += ' AND d.driver_id=?'; tQ += ' AND d.driver_id=?'; params.push(f.driver_id); }
+  if (f.market_id) { q += ' AND d.market_id=?'; tQ += ' AND d.market_id=?'; params.push(f.market_id); }
+  if (f.company_id) { q += ' AND m.company_id=?'; tQ += ' AND m.company_id=?'; params.push(f.company_id); }
   q += ' GROUP BY d.id ORDER BY d.date DESC, d.submitted_at DESC LIMIT 500';
+  
   const deliveries = await db.allAsync(q, params);
-  res.render('admin/reports', { deliveries, drivers, markets, companies, filters: f });
+  const totals = await db.getAsync(tQ, params);
+  
+  res.render('admin/reports', { deliveries, totals, drivers, markets, companies, filters: f });
 });
 
 // ── WORD DOCUMENT EXPORT ──────────────────────────────────
@@ -631,18 +639,18 @@ router.delete('/api/markets/:id', async (req, res) => {
 
 router.post('/api/articles', async (req, res) => {
   try {
-    const { code, name, price, unit } = req.body;
+    const { code, name, price, unit, external_code } = req.body;
     if (!name) return res.json({ success: false, error: 'Назив е задолжителен' });
     const mx = await db.getAsync('SELECT MAX(sort_order) mo FROM articles WHERE active=1');
-    const r = await db.runAsync('INSERT INTO articles (code,name,price,unit,sort_order) VALUES (?,?,?,?,?)', [code || '', name, parseFloat(price) || 0, unit || 'kom', (mx.mo || 0) + 1]);
+    const r = await db.runAsync('INSERT INTO articles (code,name,price,unit,sort_order,external_code) VALUES (?,?,?,?,?,?)', [code || '', name, parseFloat(price) || 0, unit || 'kom', (mx.mo || 0) + 1, external_code || null]);
     res.json({ success: true, id: r.lastID });
   } catch (e) { res.json({ success: false, error: e.message }); }
 });
 
 router.put('/api/articles/:id', async (req, res) => {
   try {
-    const { code, name, price, unit } = req.body;
-    await db.runAsync('UPDATE articles SET code=?,name=?,price=?,unit=? WHERE id=?', [code || '', name, parseFloat(price) || 0, unit || 'kom', req.params.id]);
+    const { code, name, price, unit, external_code } = req.body;
+    await db.runAsync('UPDATE articles SET code=?,name=?,price=?,unit=?,external_code=? WHERE id=?', [code || '', name, parseFloat(price) || 0, unit || 'kom', external_code || null, req.params.id]);
     res.json({ success: true });
   } catch (e) { res.json({ success: false, error: e.message }); }
 });
@@ -671,10 +679,10 @@ router.post('/api/articles/:id/move', async (req, res) => {
 
 router.post('/api/drivers', async (req, res) => {
   try {
-    const { name, username, password, phone } = req.body;
+    const { name, username, password, phone, portal_username, portal_password, portal_column_id } = req.body;
     if (!name || !username || !password) return res.json({ success: false, error: 'Сите полиња се задолжителни' });
     const hash = bcrypt.hashSync(password, 10);
-    const r = await db.runAsync("INSERT INTO users (name,username,password,role,phone) VALUES (?,?,?,'driver',?)", [name, username, hash, phone || null]);
+    const r = await db.runAsync("INSERT INTO users (name,username,password,role,phone,portal_username,portal_password,portal_column_id) VALUES (?,?,?,'driver',?,?,?,?)", [name, username, hash, phone || null, portal_username || null, portal_password || null, portal_column_id || null]);
     res.json({ success: true, id: r.lastID });
   } catch (e) {
     res.json({ success: false, error: e.message.includes('UNIQUE') ? 'Корисничкото ime веќе постои' : e.message });
@@ -683,15 +691,37 @@ router.post('/api/drivers', async (req, res) => {
 
 router.put('/api/drivers/:id', async (req, res) => {
   try {
-    const { name, username, password, phone, active } = req.body;
+    const { name, username, password, phone, active, portal_username, portal_password, portal_column_id } = req.body;
     if (password) {
       const hash = bcrypt.hashSync(password, 10);
-      await db.runAsync("UPDATE users SET name=?,username=?,password=?,phone=?,active=? WHERE id=? AND role='driver'", [name, username, hash, phone || null, active ? 1 : 0, req.params.id]);
+      await db.runAsync("UPDATE users SET name=?,username=?,password=?,phone=?,active=?,portal_username=?,portal_password=?,portal_column_id=? WHERE id=? AND role='driver'", [name, username, hash, phone || null, active ? 1 : 0, portal_username || null, portal_password || null, portal_column_id || null, req.params.id]);
     } else {
-      await db.runAsync("UPDATE users SET name=?,username=?,phone=?,active=? WHERE id=? AND role='driver'", [name, username, phone || null, active ? 1 : 0, req.params.id]);
+      await db.runAsync("UPDATE users SET name=?,username=?,phone=?,active=?,portal_username=?,portal_password=?,portal_column_id=? WHERE id=? AND role='driver'", [name, username, phone || null, active ? 1 : 0, portal_username || null, portal_password || null, portal_column_id || null, req.params.id]);
     }
     res.json({ success: true });
   } catch (e) { res.json({ success: false, error: e.message }); }
+});
+
+router.post('/api/drivers/:id/test-matrix', async (req, res) => {
+  try {
+    const driver = await db.getAsync("SELECT * FROM users WHERE id=? AND role='driver'", [req.params.id]);
+    if (!driver) return res.json({ success: false, error: 'Возачот не е пронајден' });
+    if (!driver.portal_username || !driver.portal_password || !driver.portal_column_id) {
+      return res.json({ success: false, error: 'Возачот нема подесено параметри за Matrix порталот' });
+    }
+    
+    // We import this dynamically so it doesn't cause circular dependency or startup issues if not needed
+    const { submitOrdersForDriver } = require('../services/orderSubmitter');
+    
+    // We don't await this so it runs in background, or we await it to send result.
+    // It's better to await it so the admin knows when it finishes, but it could take 10-20 seconds.
+    // Let's run it async and just return success.
+    submitOrdersForDriver(driver).catch(e => console.error('Manual matrix test failed:', e));
+    
+    res.json({ success: true, message: 'Процесот за испраќање е стартуван во позадина. Проверете ги логовите во терминалот.' });
+  } catch (e) {
+    res.json({ success: false, error: e.message });
+  }
 });
 
 // ── API: ORDERS ───────────────────────────────────────────

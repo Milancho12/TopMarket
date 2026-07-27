@@ -74,6 +74,14 @@ async function init() {
   // Migration: add company_id to markets
   try { await db.runAsync('ALTER TABLE markets ADD COLUMN company_id INTEGER REFERENCES companies(id)'); } catch (e) { }
 
+  // Migrations: add portal fields to users for MatrixTables integration
+  try { await db.runAsync('ALTER TABLE users ADD COLUMN portal_username TEXT'); } catch (e) { }
+  try { await db.runAsync('ALTER TABLE users ADD COLUMN portal_password TEXT'); } catch (e) { }
+  try { await db.runAsync('ALTER TABLE users ADD COLUMN portal_column_id TEXT'); } catch (e) { }
+
+  // Migration: add external_code to articles
+  try { await db.runAsync('ALTER TABLE articles ADD COLUMN external_code TEXT'); } catch (e) { }
+
   await db.runAsync(`CREATE TABLE IF NOT EXISTS driver_markets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     driver_id INTEGER NOT NULL,

@@ -24,6 +24,9 @@
             <div class="btn-group">
               <button class="btn btn-sm btn-outline" onclick='editDriver(<%= JSON.stringify(d) %>)'>✏️ Уреди</button>
               <button class="btn btn-sm btn-outline" style="color:var(--primary)" onclick="openMarketsModal(<%= d.id %>, '<%= d.name.replace(/'/g, "\\'") %>')">🏪 Пазари</button>
+              <% if(d.portal_username && d.portal_password && d.portal_column_id) { %>
+                <button class="btn btn-sm btn-outline" style="color:#0ea5e9" onclick="testMatrix(<%= d.id %>, '<%= d.name.replace(/'/g, "\\'") %>')">🚀 Тест Matrix</button>
+              <% } %>
             </div>
           </td>
         </tr>
@@ -41,6 +44,8 @@
     <div class="modal-body">
       <div class="form-row cols-2"><div class="field"><label>Полно Ime *</label><input id="add-name" placeholder="Маре Маревски"></div><div class="field"><label>Телефон</label><input id="add-phone" type="tel"></div></div>
       <div class="form-row cols-2"><div class="field"><label>Корисничко Ime *</label><input id="add-username" placeholder="mare"></div><div class="field"><label>Lozinka *</label><input id="add-pass" type="password" placeholder="••••••"></div></div>
+      <div style="margin:16px 0;border-top:1px solid var(--border);padding-top:16px"><h4 style="margin:0 0 12px 0;font-size:14px;color:var(--text2)">Matrix Портал (Автоматска нарачка)</h4></div>
+      <div class="form-row cols-3"><div class="field"><label>Портал Корисник</label><input id="add-portal-username" placeholder=""></div><div class="field"><label>Портал Лозинка</label><input id="add-portal-password" type="password"></div><div class="field"><label>Колона ID/Име</label><input id="add-portal-column" placeholder="пр. Воз 1"></div></div>
     </div>
     <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('modal-add')">Откажи</button><button class="btn btn-primary" onclick="addDriver()">Зачувај</button></div>
   </div>
@@ -54,6 +59,8 @@
       <input type="hidden" id="edit-id">
       <div class="form-row cols-2"><div class="field"><label>Полно Ime *</label><input id="edit-name"></div><div class="field"><label>Телефон</label><input id="edit-phone" type="tel"></div></div>
       <div class="form-row cols-2"><div class="field"><label>Корисничко Ime *</label><input id="edit-username"></div><div class="field"><label>Нова Lozinka</label><input id="edit-pass" type="password" placeholder="Остави празно за да не менуваш"></div></div>
+      <div style="margin:16px 0;border-top:1px solid var(--border);padding-top:16px"><h4 style="margin:0 0 12px 0;font-size:14px;color:var(--text2)">Matrix Портал (Автоматска нарачка)</h4></div>
+      <div class="form-row cols-3"><div class="field"><label>Портал Корисник</label><input id="edit-portal-username"></div><div class="field"><label>Портал Лозинка</label><input id="edit-portal-password" type="password"></div><div class="field"><label>Колона ID/Име</label><input id="edit-portal-column"></div></div>
       <div class="form-row"><div class="field"><label>Статус</label><select id="edit-active"><option value="1">Активен</option><option value="0">Неактивен</option></select></div></div>
     </div>
     <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('modal-edit')">Откажи</button><button class="btn btn-primary" onclick="updateDriver()">Зачувај</button></div>
@@ -98,7 +105,16 @@
 let currentDriverId = null;
 
 async function addDriver(){
-  const r=await fetch('/admin/api/drivers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:document.getElementById('add-name').value,username:document.getElementById('add-username').value,password:document.getElementById('add-pass').value,phone:document.getElementById('add-phone').value})});
+  const body = {
+    name:document.getElementById('add-name').value,
+    username:document.getElementById('add-username').value,
+    password:document.getElementById('add-pass').value,
+    phone:document.getElementById('add-phone').value,
+    portal_username:document.getElementById('add-portal-username').value,
+    portal_password:document.getElementById('add-portal-password').value,
+    portal_column_id:document.getElementById('add-portal-column').value
+  };
+  const r=await fetch('/admin/api/drivers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   const d=await r.json();
   if(d.success){toast('Возачот е додаден!');setTimeout(()=>location.reload(),800)}else toast(d.error,'error');
 }
@@ -108,14 +124,36 @@ function editDriver(d){
   document.getElementById('edit-username').value=d.username||'';
   document.getElementById('edit-phone').value=d.phone||'';
   document.getElementById('edit-pass').value='';
+  document.getElementById('edit-portal-username').value=d.portal_username||'';
+  document.getElementById('edit-portal-password').value=d.portal_password||'';
+  document.getElementById('edit-portal-column').value=d.portal_column_id||'';
   document.getElementById('edit-active').value=d.active?'1':'0';
   openModal('modal-edit');
 }
 async function updateDriver(){
   const id=document.getElementById('edit-id').value;
-  const r=await fetch('/admin/api/drivers/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:document.getElementById('edit-name').value,username:document.getElementById('edit-username').value,password:document.getElementById('edit-pass').value,phone:document.getElementById('edit-phone').value,active:document.getElementById('edit-active').value==='1'})});
+  const body = {
+    name:document.getElementById('edit-name').value,
+    username:document.getElementById('edit-username').value,
+    password:document.getElementById('edit-pass').value,
+    phone:document.getElementById('edit-phone').value,
+    portal_username:document.getElementById('edit-portal-username').value,
+    portal_password:document.getElementById('edit-portal-password').value,
+    portal_column_id:document.getElementById('edit-portal-column').value,
+    active:document.getElementById('edit-active').value==='1'
+  };
+  const r=await fetch('/admin/api/drivers/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   const d=await r.json();
   if(d.success){toast('Зачувано!');setTimeout(()=>location.reload(),800)}else toast(d.error,'error');
+}
+
+async function testMatrix(id, name) {
+  if(!confirm(`Дали сте сигурни дека сакате рачно да го активирате испраќањето кон Matrix порталот за возачот "${name}"?\nОва ќе го отвори виртуелниот прелистувач во позадина и ќе ги испрати утрешните нарачки.`)) return;
+  toast('Се стартува процесот...');
+  const r = await fetch('/admin/api/drivers/'+id+'/test-matrix', { method: 'POST' });
+  const d = await r.json();
+  if (d.success) toast(d.message || 'Стартувано!', 'success', 5000);
+  else toast(d.error || 'Грешка!', 'error');
 }
 
 // ── Driver Markets ─────────────────────────────────────────
