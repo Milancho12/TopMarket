@@ -51,13 +51,12 @@ async function submitOrdersForAccount(account) {
   const isWindows = process.platform === 'win32';
   
   const browser = await puppeteer.launch({
-    headless: isWindows ? false : 'new', // Linux (Docker) мора да биде headless
+    headless: isWindows ? false : true, // Linux (Docker) мора да биде headless
     defaultViewport: null,
     executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || (isWindows ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' : undefined),
     ignoreHTTPSErrors: true,
     args: [
-      '--start-maximized',
-      '--no-sandbox', 
+      '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-web-security',
       '--allow-running-insecure-content',
