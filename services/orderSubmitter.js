@@ -51,19 +51,20 @@ async function submitOrdersForAccount(account) {
       '--disable-setuid-sandbox',
       '--disable-web-security',
       '--allow-running-insecure-content',
+      '--disable-dev-shm-usage',
       '--disable-features=IsolateOrigins,site-per-process,HttpsUpgrades,HttpsFirstModeIncognito,HttpsFirstModeV2,HttpsFirstBalancedModeAutoEnable'
     ]
   });
   const page = await browser.newPage();
 
   page.on('requestfailed', request => {
-    console.warn(`Blocked request: ${request.url()}`);
+    console.warn(`Request failed: ${request.url()} - ${request.failure() ? request.failure().errorText : 'Unknown'}`);
   });
 
   try {
     // 2. Go to login page
     console.log(`Account ${account.username}: Se otvora Login stranata...`);
-    await page.goto('http://217.16.86.112/MatrixTables/Login.aspx', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://217.16.86.112/MatrixTables/Login.aspx', { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForSelector('input[name="ctl00$MainContent$UserName"]', { timeout: 10000 });
 
     // Login
