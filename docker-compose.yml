@@ -2,6 +2,7 @@ services:
   app:
     build: .
     container_name: zitoluks-app
+    user: "root"
     restart: unless-stopped
     ports:
       - "3000:3000"

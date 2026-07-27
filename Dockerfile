@@ -17,9 +17,6 @@ COPY . .
 # Set permissions for sqlite database directory
 RUN mkdir -p /app/data && chown -R pptruser:pptruser /app
 
-# Switch back to the non-privileged user for security
-USER pptruser
-
 # Expose port
 EXPOSE 3000
 

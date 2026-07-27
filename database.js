@@ -7,7 +7,7 @@ const db = new sqlite3.Database(DB_PATH);
 
 // Enable WAL mode and foreign keys
 db.serialize(() => {
-  db.run('PRAGMA journal_mode = WAL');
+  db.run('PRAGMA journal_mode = DELETE');
   db.run('PRAGMA foreign_keys = ON');
 });
 
