@@ -9,9 +9,8 @@ USER root
 # Copy package.json first
 COPY package*.json ./
 
-# Install npm dependencies
-RUN npm install
-
+# Install npm dependencies and force rebuild sqlite3 from source to fix GLIBC issues
+RUN npm install && npm rebuild sqlite3 --build-from-source
 # Copy all other files
 COPY . .
 
