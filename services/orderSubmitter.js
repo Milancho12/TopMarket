@@ -10,7 +10,7 @@ function normalizeText(str) {
 
 async function submitOrdersForAccount(account) {
   const date = today();
-  
+
   // 1. Fetch items for all drivers in this account
   const driverTasks = [];
   for (const driver of account.drivers) {
@@ -23,7 +23,7 @@ async function submitOrdersForAccount(account) {
       WHERE d.driver_id=? AND d.date=? AND di.next_day_qty > 0
       GROUP BY a.id
       ORDER BY a.sort_order`, [driver.id, date]);
-      
+
     if (items.length > 0) {
       driverTasks.push({ driver, items });
     } else {
@@ -38,12 +38,21 @@ async function submitOrdersForAccount(account) {
 
   console.log(`Account ${account.username}: Pronadjeni narachki za ${driverTasks.length} vozachi.`);
 
+  const isWindows = process.platform === 'win32';
+  
   const browser = await puppeteer.launch({
-    headless: false,
+    headless: isWindows ? false : 'new', // Linux (Docker) мора да биде headless
     defaultViewport: null,
-    executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || (isWindows ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' : undefined),
     ignoreHTTPSErrors: true,
-    args: ['--start-maximized']
+    args: [
+      '--start-maximized',
+      '--no-sandbox', 
+      '--disable-setuid-sandbox',
+      '--disable-web-security',
+      '--allow-running-insecure-content',
+      '--disable-features=IsolateOrigins,site-per-process,HttpsUpgrades,HttpsFirstModeIncognito,HttpsFirstModeV2'
+    ]
   });
   const page = await browser.newPage();
 
@@ -56,13 +65,13 @@ async function submitOrdersForAccount(account) {
     console.log(`Account ${account.username}: Se otvora Login stranata...`);
     await page.goto('http://217.16.86.112/MatrixTables/Login.aspx', { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('input[name="ctl00$MainContent$UserName"]', { timeout: 10000 });
-    
+
     // Login
     await page.click('input[name="ctl00$MainContent$UserName"]', { clickCount: 3 });
     await page.type('input[name="ctl00$MainContent$UserName"]', account.username);
     await page.click('input[name="ctl00$MainContent$Password"]', { clickCount: 3 });
     await page.type('input[name="ctl00$MainContent$Password"]', account.password);
-    
+
     await Promise.all([
       page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
       page.click('input[name="ctl00$MainContent$LoginButton"]')
@@ -101,7 +110,7 @@ async function submitOrdersForAccount(account) {
         console.error(`Account ${account.username} / Vozach ${driver.name}: Kolonata "${driver.portal_column_id}" ne e pronadjdena!`);
         continue; // Skip this driver, but let the others process
       }
-      
+
       console.log(`Account ${account.username} / Vozach ${driver.name}: Kolona e ${colResult.found}. Se popolnuvaat ${items.length} artikli...`);
 
       // Fill in rows for this driver
@@ -143,7 +152,7 @@ async function submitOrdersForAccount(account) {
         }) || dlgBtns[0];
         if (confirmBtn) confirmBtn.click();
       });
-      await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
+      await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => { });
     } catch (e) {
       // no dialog appeared
     }
@@ -178,7 +187,7 @@ async function submitOrdersForDriver(driver) {
 
 async function runAllOrders() {
   const drivers = await db.allAsync("SELECT * FROM users WHERE role='driver' AND active=1 AND portal_username IS NOT NULL AND portal_password IS NOT NULL AND portal_column_id IS NOT NULL");
-  
+
   // Group by account
   const accountsMap = {};
   for (const d of drivers) {
@@ -189,10 +198,10 @@ async function runAllOrders() {
     }
     accountsMap[key].drivers.push(d);
   }
-  
+
   const accounts = Object.values(accountsMap);
   console.log(`Zapocnuva avtomatsko isprakanje na narachki za ${drivers.length} vozaci (grupisani vo ${accounts.length} accounti).`);
-  
+
   for (const acc of accounts) {
     await submitOrdersForAccount(acc);
     // Add a 2 minute delay (120,000 ms) between different accounts, just to be safe with the portal

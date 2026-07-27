@@ -16,8 +16,6 @@ db.runAsync = (sql, params = []) => new Promise((resolve, reject) => db.run(sql,
 db.getAsync = (sql, params = []) => new Promise((resolve, reject) => db.get(sql, params, (err, row) => err ? reject(err) : resolve(row)));
 db.allAsync = (sql, params = []) => new Promise((resolve, reject) => db.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows)));
 
-// Sync-like wrappers — used in routes via the initialized db
-db.prepare = undefined; // remove better-sqlite3 API hint
 
 // Initialize schema and seed
 async function init() {

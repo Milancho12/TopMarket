@@ -1,0 +1,9 @@
+node_modules
+zitoLuks.db
+zitoLuks.db-shm
+zitoLuks.db-wal
+.env
+.git
+.gitignore
+Dockerfile
+docker-compose.yml

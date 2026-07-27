@@ -5,7 +5,14 @@ const { db } = require('../database');
 const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = require('docx');
 const ExcelJS = require('exceljs');
 
-const DISTRIBUTER_CODE = '300189'; // може да се промени подоцна
+const DISTRIBUTER_CODE = '300189';
+
+// Shared bread product groups used in multiple reports
+const BREAD_GROUPS = {
+  sekojedneven: { label: 'Секојдневен леб', codes: ['94', '868', '430', '725', '814'] },
+  specijalen: { label: 'Специјален леб', codes: ['737', '738', '770', '644', '643', '870', '806'] },
+  tost: { label: 'Тост леб', codes: ['89', '90', '641', '642', '669', '417', '418', '948', '949', '723', '778'] },
+};
 
 function today() { return new Date().toISOString().split('T')[0]; }
 
@@ -108,11 +115,11 @@ router.get('/reports', async (req, res) => {
            COALESCE(SUM(di.delivered_qty),0) tot_del, COALESCE(SUM(di.returned_qty),0) tot_ret
     FROM deliveries d JOIN users u ON u.id=d.driver_id JOIN markets m ON m.id=d.market_id
     LEFT JOIN delivery_items di ON di.delivery_id=d.id WHERE 1=1`;
-  
+
   let tQ = `SELECT COALESCE(SUM(di.delivered_qty),0) g_del, COALESCE(SUM(di.returned_qty),0) g_ret
             FROM deliveries d JOIN markets m ON m.id=d.market_id
             LEFT JOIN delivery_items di ON di.delivery_id=d.id WHERE 1=1`;
-  
+
   const params = [];
   if (f.date_from) { q += ' AND d.date>=?'; tQ += ' AND d.date>=?'; params.push(f.date_from); }
   if (f.date_to) { q += ' AND d.date<=?'; tQ += ' AND d.date<=?'; params.push(f.date_to); }
@@ -120,10 +127,10 @@ router.get('/reports', async (req, res) => {
   if (f.market_id) { q += ' AND d.market_id=?'; tQ += ' AND d.market_id=?'; params.push(f.market_id); }
   if (f.company_id) { q += ' AND m.company_id=?'; tQ += ' AND m.company_id=?'; params.push(f.company_id); }
   q += ' GROUP BY d.id ORDER BY d.date DESC, d.submitted_at DESC LIMIT 500';
-  
+
   const deliveries = await db.allAsync(q, params);
   const totals = await db.getAsync(tQ, params);
-  
+
   res.render('admin/reports', { deliveries, totals, drivers, markets, companies, filters: f });
 });
 
@@ -294,9 +301,9 @@ router.get('/zito-report/excel', async (req, res) => {
 
     let sql = '';
     const params = [date_from, date_to];
-    
+
     if (company_id && !market_id) {
-       sql = `
+      sql = `
          SELECT c.id as market_id, c.name as market_name, '' as market_city, '' as market_address,
                 '' as client_code, '' as object_code,
                 a.code art_code, a.name art_name, a.price,
@@ -310,11 +317,11 @@ router.get('/zito-report/excel', async (req, res) => {
          JOIN companies c ON c.id = m.company_id
          WHERE d.date>=? AND d.date<=? AND m.company_id=?
        `;
-       params.push(company_id);
-       if (driver_id) { sql += ' AND d.driver_id=?'; params.push(driver_id); }
-       sql += ' GROUP BY c.id, a.id HAVING net_qty > 0 ORDER BY c.name, a.sort_order';
+      params.push(company_id);
+      if (driver_id) { sql += ' AND d.driver_id=?'; params.push(driver_id); }
+      sql += ' GROUP BY c.id, a.id HAVING net_qty > 0 ORDER BY c.name, a.sort_order';
     } else {
-       sql = `
+      sql = `
          SELECT m.id market_id, m.name market_name, m.city market_city, m.address market_address,
                 m.client_code, m.object_code,
                 a.code art_code, a.name art_name, a.price,
@@ -326,9 +333,9 @@ router.get('/zito-report/excel', async (req, res) => {
          JOIN articles a ON a.id = di.article_id
          JOIN markets m ON m.id = d.market_id
          WHERE d.date>=? AND d.date<=?`;
-       if (driver_id) { sql += ' AND d.driver_id=?'; params.push(driver_id); }
-       if (market_id) { sql += ' AND d.market_id=?'; params.push(market_id); }
-       sql += ' GROUP BY m.id, a.id HAVING net_qty > 0 ORDER BY m.name, a.sort_order';
+      if (driver_id) { sql += ' AND d.driver_id=?'; params.push(driver_id); }
+      if (market_id) { sql += ' AND d.market_id=?'; params.push(market_id); }
+      sql += ' GROUP BY m.id, a.id HAVING net_qty > 0 ORDER BY m.name, a.sort_order';
     }
 
     const rows = await db.allAsync(sql, params);
@@ -471,7 +478,7 @@ router.get('/zito-report/excel', async (req, res) => {
 
     if (rows.length > 0) {
       ws.addRow([]);
-      
+
       const grandTotalRow = ws.addRow([
         '', '', '', '', '', '', '', '', 'ВКУПНО:',
         gDel, gRet, gNet,
@@ -479,11 +486,11 @@ router.get('/zito-report/excel', async (req, res) => {
       ]);
       grandTotalRow.height = 20;
       grandTotalRow.eachCell({ includeEmpty: true }, (cell, colNum) => {
-         if (colNum >= 9) {
-           cell.style = colNum >= 10 ? numStyle : dataStyle;
-           cell.font = { bold: true, size: 11 };
-           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE066' } };
-         }
+        if (colNum >= 9) {
+          cell.style = colNum >= 10 ? numStyle : dataStyle;
+          cell.font = { bold: true, size: 11 };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE066' } };
+        }
       });
     }
 
@@ -534,25 +541,15 @@ router.get('/return-by-client', async (req, res) => {
   } catch (e) { res.status(500).send(e.message); }
 });
 
-// ── RETURN BY PRODUCT GROUP REPORT ───────────────────────
 router.get('/return-by-group', async (req, res) => {
   try {
     const t = today();
-    const f = {
-      date_from: req.query.date_from || t,
-      date_to: req.query.date_to || t
-    };
-    // All groups with their code lists
-    const GROUPS = [
-      { key: 'sekojedneven', label: 'Секојдневен леб', codes: ['814', '94', '868', '430', '725'] },
-      { key: 'specijalen', label: 'Специјален леб', codes: ['737', '738', '770', '644', '643', '870', '806'] },
-      { key: 'tost', label: 'Тост леб', codes: ['89', '90', '641', '642', '669', '417', '418', '948', '949', '723', '778'] },
-    ];
+    const f = { date_from: req.query.date_from || t, date_to: req.query.date_to || t };
 
     const result = [];
-    for (const g of GROUPS) {
+    for (const [key, g] of Object.entries(BREAD_GROUPS)) {
       const placeholders = g.codes.map(() => '?').join(',');
-      const sql = `
+      const rows = await db.allAsync(`
         SELECT a.code art_code, a.name art_name,
                SUM(di.delivered_qty) tot_del,
                SUM(di.returned_qty)  tot_ret,
@@ -563,21 +560,14 @@ router.get('/return-by-group', async (req, res) => {
         WHERE d.date>=? AND d.date<=?
           AND a.code IN (${placeholders})
         GROUP BY a.id
-        ORDER BY a.sort_order`;
-      const rows = await db.allAsync(sql, [f.date_from, f.date_to, ...g.codes]);
-      result.push({ ...g, rows });
+        ORDER BY a.sort_order`, [f.date_from, f.date_to, ...g.codes]);
+      result.push({ ...g, key, rows });
     }
     res.render('admin/return-by-group', { result, filters: f });
   } catch (e) { res.status(500).send(e.message); }
 });
 
 // ── BREAD CATEGORY SALES REPORTS ─────────────────────────
-const BREAD_GROUPS = {
-  sekojedneven: { label: 'Секојдневен леб', codes: ['89', '94', '868', '430', '725', '814'] },
-  specijalen: { label: 'Специјален леб', codes: ['737', '738', '770', '644', '643', '870', '806'] },
-  tost: { label: 'Тост леб', codes: ['89', '90', '641', '642', '669', '417', '418', '948', '949', '723', '778'] },
-};
-
 router.get('/bread-report/:group', async (req, res) => {
   try {
     const group = BREAD_GROUPS[req.params.group];
@@ -709,15 +699,8 @@ router.post('/api/drivers/:id/test-matrix', async (req, res) => {
     if (!driver.portal_username || !driver.portal_password || !driver.portal_column_id) {
       return res.json({ success: false, error: 'Возачот нема подесено параметри за Matrix порталот' });
     }
-    
-    // We import this dynamically so it doesn't cause circular dependency or startup issues if not needed
     const { submitOrdersForDriver } = require('../services/orderSubmitter');
-    
-    // We don't await this so it runs in background, or we await it to send result.
-    // It's better to await it so the admin knows when it finishes, but it could take 10-20 seconds.
-    // Let's run it async and just return success.
     submitOrdersForDriver(driver).catch(e => console.error('Manual matrix test failed:', e));
-    
     res.json({ success: true, message: 'Процесот за испраќање е стартуван во позадина. Проверете ги логовите во терминалот.' });
   } catch (e) {
     res.json({ success: false, error: e.message });
