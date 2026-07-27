@@ -51,7 +51,7 @@ async function submitOrdersForAccount(account) {
       '--disable-setuid-sandbox',
       '--disable-web-security',
       '--allow-running-insecure-content',
-      '--disable-features=IsolateOrigins,site-per-process,HttpsUpgrades,HttpsFirstModeIncognito,HttpsFirstModeV2'
+      '--disable-features=IsolateOrigins,site-per-process,HttpsUpgrades,HttpsFirstModeIncognito,HttpsFirstModeV2,HttpsFirstBalancedModeAutoEnable'
     ]
   });
   const page = await browser.newPage();
