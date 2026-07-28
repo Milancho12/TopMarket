@@ -14,5 +14,7 @@ services:
       # Провери го IP-то во Tailscale app на телефонот (пр. 100.x.x.x)
       # Провери го портот во Every Proxy app (стандардно е 1080 за SOCKS5)
       - SOCKS5_PROXY=100.104.217.75:1080
+      # Временска зона — Macedonia (UTC+2 / UTC+3 лето)
+      - TZ=Europe/Skopje
     volumes:
       - ./zitoLuks.db:/app/zitoLuks.db
