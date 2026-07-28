@@ -25,4 +25,4 @@ RUN mkdir -p /app/data && chown -R pptruser:pptruser /app
 EXPOSE 3000
 
 # Start command
-CMD ["npm", "start"]
+CMD ["node", "server.js"]
