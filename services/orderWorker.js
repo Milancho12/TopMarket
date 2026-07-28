@@ -13,13 +13,19 @@ function normalizeText(str) {
   return (str || '').replace(/[\r\n\t ]+/g, ' ').trim().toLowerCase();
 }
 
-function log(msg)   { process.send({ type: 'log',   msg }); }
-function warn(msg)  { process.send({ type: 'warn',  msg }); }
+function log(msg) { process.send({ type: 'log', msg }); }
+function warn(msg) { process.send({ type: 'warn', msg }); }
 function error(msg) { process.send({ type: 'error', msg }); }
-function done()     { process.send({ type: 'done' }); }
-function failed(msg){ process.send({ type: 'failed', msg }); }
+function done() { process.send({ type: 'done' }); }
+function failed(msg) { process.send({ type: 'failed', msg }); }
 
 process.on('message', async ({ account, date }) => {
+  // Route Chrome traffic through Every Proxy on the phone (Macedonian IP) via Tailscale.
+  // Set SOCKS5_PROXY=<tailscale-phone-ip>:<every-proxy-port> in docker-compose.yml
+  const proxyArgs = process.env.SOCKS5_PROXY
+    ? [`--proxy-server=socks5://${process.env.SOCKS5_PROXY}`]
+    : [];
+
   const browser = await puppeteer.launch({
     headless: true,
     executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
@@ -31,7 +37,8 @@ process.on('message', async ({ account, date }) => {
       '--disable-web-security',
       '--allow-running-insecure-content',
       '--disable-dev-shm-usage',
-      '--disable-features=IsolateOrigins,site-per-process,HttpsUpgrades,HttpsFirstModeIncognito,HttpsFirstModeV2,HttpsFirstBalancedModeAutoEnable'
+      '--disable-features=IsolateOrigins,site-per-process,HttpsUpgrades,HttpsFirstModeIncognito,HttpsFirstModeV2,HttpsFirstBalancedModeAutoEnable',
+      ...proxyArgs
     ]
   });
 

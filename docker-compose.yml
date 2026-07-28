@@ -10,5 +10,9 @@ services:
       - NODE_ENV=production
       - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
+      # Every Proxy на телефон (преку Tailscale) — замени со вистинскиот IP и порт
+      # Провери го IP-то во Tailscale app на телефонот (пр. 100.x.x.x)
+      # Провери го портот во Every Proxy app (стандардно е 1080 за SOCKS5)
+      - SOCKS5_PROXY=100.104.217.75:1080
     volumes:
       - ./zitoLuks.db:/app/zitoLuks.db
