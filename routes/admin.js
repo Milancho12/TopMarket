@@ -14,7 +14,10 @@ const BREAD_GROUPS = {
   tost: { label: 'Тост леб', codes: ['89', '90', '641', '642', '669', '417', '418', '948', '949', '723', '778'] },
 };
 
-function today() { return new Date().toISOString().split('T')[0]; }
+function today() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
 
 // ── PAGES ──────────────────────────────────────────────────
 
