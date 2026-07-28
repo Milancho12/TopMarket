@@ -123,20 +123,23 @@ process.on('message', async ({ account, date }) => {
     log(`Account ${account.username}: Cekkam potvrden dijalog (Prodolzi)...`);
     try {
       await page.waitForSelector('.ui-dialog-buttonpane button, .ui-dialog button', { visible: true, timeout: 5000 });
-      // Use Promise.all so navigation triggered by the dialog click doesn't cause a CDP timeout
-      await Promise.all([
-        page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => { }),
-        page.evaluate(() => {
-          const dlgBtns = Array.from(document.querySelectorAll('.ui-dialog-buttonpane button, .ui-dialog button'));
-          const confirmBtn = dlgBtns.find(b => {
-            const t = (b.innerText || '').toLowerCase();
-            return t.includes('продолжи') || t.includes('prodolzi') || t.includes('ok') || t.includes('yes') || t.includes('да');
-          }) || dlgBtns[0];
-          if (confirmBtn) confirmBtn.click();
-        })
-      ]);
+
+      const btnText = await page.evaluate(() => {
+        const dlgBtns = Array.from(document.querySelectorAll('.ui-dialog-buttonpane button, .ui-dialog button'));
+        const confirmBtn = dlgBtns.find(b => {
+          const t = (b.innerText || '').toLowerCase();
+          return t.includes('продолжи') || t.includes('prodolzi') || t.includes('ok') || t.includes('yes') || t.includes('да');
+        }) || dlgBtns[0];
+        if (confirmBtn) { confirmBtn.click(); return confirmBtn.innerText.trim(); }
+        return 'none';
+      });
+      log(`Account ${account.username}: Kliknato na dijalog kopce: "${btnText}". Cekkam 3s...`);
+
+      // Portal most likely does NOT navigate — it shows an in-place message.
+      // Wait 3s for the server-side postback to complete instead of blocking on navigation.
+      await new Promise(r => setTimeout(r, 3000));
     } catch (e) {
-      // no dialog appeared
+      log(`Account ${account.username}: Nema potvrduvacki dijalog (mozno e direktno isprateno).`);
     }
 
     const message = await page.evaluate(() => {
@@ -147,7 +150,6 @@ process.on('message', async ({ account, date }) => {
     if (message) log(`Account ${account.username}: Poraka od portal: "${message}"`);
     log(`Account ${account.username}: Narachkata e uspeshno ispratena za site vozachi na ovoj account!`);
 
-    await new Promise(r => setTimeout(r, 4000));
     done();
 
   } catch (err) {
