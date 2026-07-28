@@ -118,6 +118,9 @@ process.on('message', async ({ account, date }) => {
 
     log(`Account ${account.username}: Klikam na kopcheto za Naracaj...`);
     await page.waitForSelector('#MainContent_SubmitOrders, input[name="ctl00$MainContent$SubmitOrders"]', { timeout: 5000 });
+
+    // Set up navigation listener BEFORE the click — portal may navigate immediately after submit
+    const maybeNav = page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 10000 }).catch(() => null);
     await page.click('#MainContent_SubmitOrders, input[name="ctl00$MainContent$SubmitOrders"]');
 
     log(`Account ${account.username}: Cekkam potvrden dijalog (Prodolzi)...`);
@@ -133,23 +136,29 @@ process.on('message', async ({ account, date }) => {
         if (confirmBtn) { confirmBtn.click(); return confirmBtn.innerText.trim(); }
         return 'none';
       });
-      log(`Account ${account.username}: Kliknato na dijalog kopce: "${btnText}". Cekkam 3s...`);
-
-      // Portal most likely does NOT navigate — it shows an in-place message.
-      // Wait 3s for the server-side postback to complete instead of blocking on navigation.
-      await new Promise(r => setTimeout(r, 3000));
+      log(`Account ${account.username}: Kliknato na dijalog kopce: "${btnText}".`);
     } catch (e) {
-      log(`Account ${account.username}: Nema potvrduvacki dijalog (mozno e direktno isprateno).`);
+      log(`Account ${account.username}: Nema potvrduvacki dijalog (direktno isprateno).`);
     }
 
-    const message = await page.evaluate(() => {
-      const msg = document.querySelector('#MainContent_LabelMessage, span[id*="LabelMessage"]');
-      return msg ? msg.innerText : null;
-    });
+    // Wait for navigation OR timeout — whichever comes first
+    await maybeNav;
+    await new Promise(r => setTimeout(r, 1500));
+
+    // Read result message safely — race against 3s timeout to prevent hang on detached context
+    let message = null;
+    try {
+      message = await Promise.race([
+        page.evaluate(() => {
+          const msg = document.querySelector('#MainContent_LabelMessage, span[id*="LabelMessage"]');
+          return msg ? msg.innerText : null;
+        }),
+        new Promise(r => setTimeout(() => r(null), 3000))
+      ]);
+    } catch (e) { /* page navigated or detached — that's fine */ }
 
     if (message) log(`Account ${account.username}: Poraka od portal: "${message}"`);
     log(`Account ${account.username}: Narachkata e uspeshno ispratena za site vozachi na ovoj account!`);
-
     done();
 
   } catch (err) {
