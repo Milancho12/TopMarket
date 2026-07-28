@@ -80,7 +80,7 @@ process.on('message', async ({ account, date }) => {
         for (let i = 0; i < headers.length; i++) {
           const text = norm(headers[i].innerText);
           const title = norm(headers[i].getAttribute('title') || '');
-          if (text.includes(searchNorm) || title.includes(searchNorm) || searchNorm.includes(text.substring(0, 10))) {
+          if (text.includes(searchNorm) || title.includes(searchNorm) || searchNorm.includes(text)) {
             found = i;
             break;
           }
