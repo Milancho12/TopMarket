@@ -4,8 +4,32 @@ const { db } = require('../database');
 
 function today() { return new Date().toISOString().split('T')[0]; }
 
-// Global lock to prevent concurrent Puppeteer instances
-let isRunning = false;
+/**
+ * Per-account queue — key = "portal_username|portal_password"
+ * Each value is the tail of a Promise chain for that account.
+ * If the same account is triggered twice, the second call waits
+ * for the first to finish before starting its own worker.
+ */
+const accountQueues = new Map();
+
+/**
+ * Enqueue a run for a given account.
+ * Returns a Promise that resolves when THIS run finishes.
+ */
+function enqueueAccount(account) {
+  const key = `${account.username}|${account.password}`;
+  // Chain onto whatever is already queued for this account
+  const prev = accountQueues.get(key) || Promise.resolve();
+  const next = prev
+    .then(() => submitOrdersForAccount(account))
+    .catch(err => console.error(`[Queue] Error for account ${account.username}:`, err));
+  accountQueues.set(key, next);
+  // Clean up the map entry once this run is the last one
+  next.finally(() => {
+    if (accountQueues.get(key) === next) accountQueues.delete(key);
+  });
+  return next;
+}
 
 async function submitOrdersForAccount(account) {
   const date = today();
@@ -37,13 +61,6 @@ async function submitOrdersForAccount(account) {
 
   console.log(`Account ${account.username}: Pronadjeni narachki za ${driverTasks.length} vozachi.`);
 
-  // Check if already running
-  if (isRunning) {
-    console.warn(`Account ${account.username}: Puppeteer e veke aktiven (drug process raboti). Se preskacuva.`);
-    return;
-  }
-  isRunning = true;
-
   return new Promise((resolve) => {
     // Fork a completely separate process for Chrome — isolated from Express's event loop
     const worker = fork(path.join(__dirname, 'orderWorker.js'), [], {
@@ -54,40 +71,54 @@ async function submitOrdersForAccount(account) {
     // Send the job to the worker
     worker.send({ account: { ...account, driverTasks }, date });
 
+    let settled = false;
+    function finish() {
+      if (settled) return;
+      settled = true;
+      // Ensure the worker process is fully terminated
+      try { worker.kill('SIGTERM'); } catch (_) {}
+      // Give it 2 s to exit gracefully, then SIGKILL
+      const forceKill = setTimeout(() => {
+        try { worker.kill('SIGKILL'); } catch (_) {}
+      }, 2000);
+      worker.once('exit', () => clearTimeout(forceKill));
+      resolve();
+    }
+
     // Relay worker log messages to our console
     worker.on('message', (msg) => {
       switch (msg.type) {
-        case 'log':   console.log(msg.msg);   break;
-        case 'warn':  console.warn(msg.msg);  break;
-        case 'error': console.error(msg.msg); break;
+        case 'log':    console.log(msg.msg);    break;
+        case 'warn':   console.warn(msg.msg);   break;
+        case 'error':  console.error(msg.msg);  break;
         case 'done':
+          console.log(`[Worker] Account ${account.username}: done.`);
+          finish();
+          break;
         case 'failed':
-          isRunning = false;
-          worker.kill();
-          resolve();
+          console.error(`[Worker] Account ${account.username}: failed — ${msg.msg}`);
+          finish();
           break;
       }
     });
 
     worker.on('error', (err) => {
       console.error(`Worker process error: ${err.message}`);
-      isRunning = false;
-      resolve();
+      finish();
     });
 
-    worker.on('exit', (code) => {
-      if (isRunning) {
-        console.error(`Worker exited unexpectedly with code ${code}`);
-        isRunning = false;
+    worker.on('exit', (code, signal) => {
+      if (!settled) {
+        console.error(`Worker exited unexpectedly (code=${code}, signal=${signal})`);
+        finish();
       }
-      resolve();
     });
   });
 }
 
-// Keep the old function signature for individual test buttons
+// Keep the old function signature for individual test buttons in admin
 async function submitOrdersForDriver(driver) {
-  return submitOrdersForAccount({
+  return enqueueAccount({
     username: driver.portal_username,
     password: driver.portal_password,
     drivers: [driver]
@@ -111,11 +142,12 @@ async function runAllOrders() {
   const accounts = Object.values(accountsMap);
   console.log(`Zapocnuva avtomatsko isprakanje na narachki za ${drivers.length} vozaci (grupisani vo ${accounts.length} accounti).`);
 
+  // Use the queue so that concurrent cron triggers don't pile up
   for (const acc of accounts) {
-    await submitOrdersForAccount(acc);
+    await enqueueAccount(acc);
     console.log('Pauza od 2 minuti pred sledniot account...');
     await new Promise(r => setTimeout(r, 120000));
   }
 }
 
-module.exports = { runAllOrders, submitOrdersForDriver };
+module.exports = { runAllOrders, submitOrdersForDriver, enqueueAccount };

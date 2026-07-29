@@ -76,6 +76,8 @@ async function init() {
   try { await db.runAsync('ALTER TABLE users ADD COLUMN portal_username TEXT'); } catch (e) { }
   try { await db.runAsync('ALTER TABLE users ADD COLUMN portal_password TEXT'); } catch (e) { }
   try { await db.runAsync('ALTER TABLE users ADD COLUMN portal_column_id TEXT'); } catch (e) { }
+  // Migration: track when a driver last sent their order to Matrix portal
+  try { await db.runAsync('ALTER TABLE users ADD COLUMN last_order_sent_at TEXT'); } catch (e) { }
 
   // Migration: add external_code to articles
   try { await db.runAsync('ALTER TABLE articles ADD COLUMN external_code TEXT'); } catch (e) { }

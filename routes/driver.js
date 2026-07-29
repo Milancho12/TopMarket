@@ -62,7 +62,42 @@ router.get('/', async (req, res) => {
       [driverId, date, driverId, date, driverId]);
 
     const allMarkets = await db.allAsync('SELECT id,name FROM markets WHERE active=1 ORDER BY name');
-    res.render('driver/home', { date, isToday, assigned, extra, allMarkets });
+
+    // Check if this driver has Matrix portal credentials configured
+    const driverRecord = await db.getAsync(
+      'SELECT portal_username, portal_password, portal_column_id, last_order_sent_at FROM users WHERE id=?', [driverId]);
+    const hasPortal = !!(driverRecord &&
+      driverRecord.portal_username && driverRecord.portal_password && driverRecord.portal_column_id);
+
+    // Detect if there are next_day_qty changes made AFTER the last order send
+    // (so the driver knows they need to re-send)
+    let orderChanged = false;
+    if (hasPortal && driverRecord.last_order_sent_at) {
+      const changed = await db.getAsync(`
+        SELECT 1 FROM deliveries d
+        JOIN delivery_items di ON di.delivery_id = d.id
+        WHERE d.driver_id = ? AND d.date = ?
+          AND di.next_day_qty > 0
+          AND COALESCE(d.edited_at, d.submitted_at) > ?
+        LIMIT 1`,
+        [driverId, date, driverRecord.last_order_sent_at]);
+      orderChanged = !!changed;
+    } else if (hasPortal && !driverRecord.last_order_sent_at) {
+      // Never sent before — check if there are any next_day_qty items
+      const hasItems = await db.getAsync(`
+        SELECT 1 FROM deliveries d
+        JOIN delivery_items di ON di.delivery_id = d.id
+        WHERE d.driver_id = ? AND d.date = ? AND di.next_day_qty > 0 LIMIT 1`,
+        [driverId, date]);
+      orderChanged = !!hasItems;
+    }
+
+    // Expose on res.locals.user so EJS templates can use it
+    if (res.locals.user) res.locals.user.hasPortal = hasPortal;
+
+    res.render('driver/home', { date, isToday, assigned, extra, allMarkets, orderChanged });
+
+
   } catch(e) { res.status(500).send(e.message); }
 });
 
@@ -273,5 +308,62 @@ router.get('/total-returns', async (req, res) => {
   } catch(e) { res.status(500).send(e.message); }
 });
 
+// ── SEND ORDER TO MATRIX (manual trigger by driver) ────────────────────
+router.post('/send-order', async (req, res) => {
+  try {
+    const driverId = req.session.user.id;
+
+    // Load full driver record (need portal fields)
+    const driver = await db.getAsync(
+      "SELECT * FROM users WHERE id=? AND role='driver' AND active=1", [driverId]);
+    if (!driver) return res.json({ success: false, error: 'Возачот не е пронајден' });
+
+    if (!driver.portal_username || !driver.portal_password || !driver.portal_column_id) {
+      return res.json({ success: false, error: 'Немате поставено Matrix portal параметри' });
+    }
+
+    // ── Server-side guard: reject if nothing has changed since the last send ──
+    const today = new Date().toISOString().split('T')[0];
+    if (driver.last_order_sent_at) {
+      const changed = await db.getAsync(`
+        SELECT 1 FROM deliveries d
+        JOIN delivery_items di ON di.delivery_id = d.id
+        WHERE d.driver_id = ? AND d.date = ?
+          AND di.next_day_qty > 0
+          AND COALESCE(d.edited_at, d.submitted_at) > ?
+        LIMIT 1`,
+        [driverId, today, driver.last_order_sent_at]);
+      if (!changed) {
+        return res.json({ success: false, error: 'Нема промени во нарачката од последното испраќање.' });
+      }
+    } else {
+      // Never sent — check that there is at least one item to send
+      const hasItems = await db.getAsync(`
+        SELECT 1 FROM deliveries d
+        JOIN delivery_items di ON di.delivery_id = d.id
+        WHERE d.driver_id = ? AND d.date = ? AND di.next_day_qty > 0 LIMIT 1`,
+        [driverId, today]);
+      if (!hasItems) {
+        return res.json({ success: false, error: 'Нема нарачки за утре за испраќање.' });
+      }
+    }
+
+    // Submit only for THIS driver (not all drivers on the same account)
+    const { enqueueAccount } = require('../services/orderSubmitter');
+    enqueueAccount({
+      username: driver.portal_username.trim(),
+      password: driver.portal_password.trim(),
+      drivers: [driver]
+    }).catch(e => console.error('[send-order] enqueue error:', e));
+
+    // Record the send timestamp so we can detect subsequent changes
+    await db.runAsync('UPDATE users SET last_order_sent_at=? WHERE id=?',
+      [new Date().toISOString(), driverId]);
+
+    res.json({ success: true, message: 'Нарачката е ставена во ред за испраќање. Ќе се изврши наскоро.' });
+  } catch (e) { res.json({ success: false, error: e.message }); }
+});
+
 module.exports = router;
+
 
