@@ -7,19 +7,26 @@ function today() {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
-// Returns the next working day date string (skips Sunday → Monday)
+// List of specific non-working dates (e.g. holidays)
+const NON_WORKING_DAYS = ['2026-08-03'];
+
+// Returns the next working day date string (skips Sundays and holidays)
 function nextWorkingDay(dateStr) {
   const d = new Date(dateStr + 'T12:00:00');
   d.setDate(d.getDate() + 1);
-  if (d.getDay() === 0) d.setDate(d.getDate() + 1); // skip Sunday
+  while (d.getDay() === 0 || NON_WORKING_DAYS.includes(d.toISOString().split('T')[0])) {
+    d.setDate(d.getDate() + 1);
+  }
   return d.toISOString().split('T')[0];
 }
 
-// Returns the previous working day date string (skips Sunday ← Saturday)
+// Returns the previous working day date string (skips Sundays and holidays)
 function prevWorkingDay(dateStr) {
   const d = new Date(dateStr + 'T12:00:00');
   d.setDate(d.getDate() - 1);
-  if (d.getDay() === 0) d.setDate(d.getDate() - 1); // skip Sunday
+  while (d.getDay() === 0 || NON_WORKING_DAYS.includes(d.toISOString().split('T')[0])) {
+    d.setDate(d.getDate() - 1);
+  }
   return d.toISOString().split('T')[0];
 }
 
@@ -109,7 +116,10 @@ router.get('/tomorrow-orders', async (req, res) => {
 
     // Calculate the delivery date (next working day — skip Sunday)
     const deliveryDate = nextWorkingDay(date);
-    const isSundaySkipped = new Date(date + 'T12:00:00').getDay() === 6; // Saturday → skip Sunday
+    
+    const nextDay = new Date(date + 'T12:00:00');
+    nextDay.setDate(nextDay.getDate() + 1);
+    const isSundaySkipped = deliveryDate !== nextDay.toISOString().split('T')[0];
 
     // Aggregate next_day_qty across all markets for this driver on chosen date
     const items = await db.allAsync(`

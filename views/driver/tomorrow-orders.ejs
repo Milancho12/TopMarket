@@ -152,7 +152,7 @@
   <% if (isSundaySkipped) { %>
   <div class="sunday-skip-notice">
     <span class="icon">⚠️</span>
-    <span>Недела е неработна – нарачките се прикажани за <strong>понеделник <%= new Date(deliveryDate+'T12:00:00').toLocaleDateString('mk-MK',{day:'numeric',month:'long'}) %></strong></span>
+    <span>Следниот ден е неработен – нарачките се прикажани за <strong><%= new Date(deliveryDate+'T12:00:00').toLocaleDateString('mk-MK',{weekday:'long',day:'numeric',month:'long'}) %></strong></span>
   </div>
   <% } %>
 
