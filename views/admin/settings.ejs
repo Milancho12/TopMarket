@@ -34,6 +34,78 @@
       </form>
     </div>
   </div>
+
+  <!-- HOLIDAYS SECTION -->
+  <div class="card" style="margin-top: 30px;">
+    <div class="card-header">
+      <span class="card-title">📅 Неработни денови (Празници)</span>
+    </div>
+    <div style="padding: 24px;">
+      <div style="font-size: 13px; color: var(--text3); margin-bottom: 16px;">
+        Додајте датуми кои се државни празници или неработни денови. Системот автоматски ќе ги прескокне овие денови при пресметка на следниот работен ден. (Неделите се прескокнуваат автоматски).
+      </div>
+      
+      <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+        <input type="date" id="new-holiday-date" style="flex: 1; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); outline: none; font-size: 15px;">
+        <button onclick="addHoliday()" class="btn btn-primary" style="padding: 0 20px; border-radius: 8px;">➕ Додај</button>
+      </div>
+
+      <div id="holidays-list" style="display: flex; flex-direction: column; gap: 8px;">
+        <!-- Loaded via JS -->
+      </div>
+    </div>
+  </div>
 </div>
+
+<script>
+async function loadHolidays() {
+  const res = await fetch('/admin/api/holidays');
+  const holidays = await res.json();
+  const list = document.getElementById('holidays-list');
+  list.innerHTML = '';
+  if (holidays.length === 0) {
+    list.innerHTML = '<div style="color: var(--text3); font-size: 14px; font-style: italic;">Нема додадено празници.</div>';
+    return;
+  }
+  holidays.forEach(h => {
+    const div = document.createElement('div');
+    div.style = "display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;";
+    
+    // Format date for display
+    const d = new Date(h.date);
+    const formatted = d.toLocaleDateString('mk-MK', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    
+    div.innerHTML = `
+      <span style="font-weight: 600; color: var(--text);">${formatted}</span>
+      <button onclick="deleteHoliday('${h.date}')" class="btn btn-danger btn-sm" style="padding: 4px 10px; font-size: 12px; border-radius: 6px;">❌ Бриши</button>
+    `;
+    list.appendChild(div);
+  });
+}
+
+async function addHoliday() {
+  const date = document.getElementById('new-holiday-date').value;
+  if (!date) return alert('Изберете датум');
+  
+  const res = await fetch('/admin/api/holidays', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ date })
+  });
+  if (res.ok) {
+    document.getElementById('new-holiday-date').value = '';
+    loadHolidays();
+  }
+}
+
+async function deleteHoliday(date) {
+  if (!confirm(`Дали сте сигурни дека сакате да го избришете празникот на ${date}?`)) return;
+  const res = await fetch('/admin/api/holidays/' + date, { method: 'DELETE' });
+  if (res.ok) loadHolidays();
+}
+
+// Load on mount
+document.addEventListener('DOMContentLoaded', loadHolidays);
+</script>
 
 <%- include('_footer') %>

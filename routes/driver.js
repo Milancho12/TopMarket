@@ -7,24 +7,29 @@ function today() {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
-// List of specific non-working dates (e.g. holidays)
-const NON_WORKING_DAYS = ['2026-08-03'];
+// Helper to fetch holidays from DB
+async function getHolidays() {
+  try {
+    const rows = await db.allAsync('SELECT date FROM holidays');
+    return rows.map(r => r.date);
+  } catch (e) { return []; }
+}
 
 // Returns the next working day date string (skips Sundays and holidays)
-function nextWorkingDay(dateStr) {
+function nextWorkingDay(dateStr, holidays = []) {
   const d = new Date(dateStr + 'T12:00:00');
   d.setDate(d.getDate() + 1);
-  while (d.getDay() === 0 || NON_WORKING_DAYS.includes(d.toISOString().split('T')[0])) {
+  while (d.getDay() === 0 || holidays.includes(d.toISOString().split('T')[0])) {
     d.setDate(d.getDate() + 1);
   }
   return d.toISOString().split('T')[0];
 }
 
 // Returns the previous working day date string (skips Sundays and holidays)
-function prevWorkingDay(dateStr) {
+function prevWorkingDay(dateStr, holidays = []) {
   const d = new Date(dateStr + 'T12:00:00');
   d.setDate(d.getDate() - 1);
-  while (d.getDay() === 0 || NON_WORKING_DAYS.includes(d.toISOString().split('T')[0])) {
+  while (d.getDay() === 0 || holidays.includes(d.toISOString().split('T')[0])) {
     d.setDate(d.getDate() - 1);
   }
   return d.toISOString().split('T')[0];
@@ -39,7 +44,7 @@ router.get('/', async (req, res) => {
 
     // Markets from orders for chosen date
     const orderMarkets = await db.allAsync(`
-      SELECT m.id, m.name, m.address, d.id del_id, d.submitted_at
+      SELECT m.id, m.name, m.address, m.is_large, d.id del_id, d.submitted_at
       FROM orders o JOIN markets m ON m.id=o.market_id
       LEFT JOIN deliveries d ON d.driver_id=? AND d.market_id=m.id AND d.date=?
       WHERE o.driver_id=? AND o.date=? AND m.active=1 ORDER BY m.name`,
@@ -47,7 +52,7 @@ router.get('/', async (req, res) => {
 
     // Permanently assigned markets
     const permMarkets = await db.allAsync(`
-      SELECT m.id, m.name, m.address, d.id del_id, d.submitted_at
+      SELECT m.id, m.name, m.address, m.is_large, d.id del_id, d.submitted_at
       FROM driver_markets dm JOIN markets m ON m.id=dm.market_id
       LEFT JOIN deliveries d ON d.driver_id=? AND d.market_id=m.id AND d.date=?
       WHERE dm.driver_id=? AND m.active=1
@@ -60,7 +65,7 @@ router.get('/', async (req, res) => {
 
     // Extra deliveries (not in orders or permanent assignments)
     const extra = await db.allAsync(`
-      SELECT m.id, m.name, m.address, d.id del_id, d.submitted_at
+      SELECT m.id, m.name, m.address, m.is_large, d.id del_id, d.submitted_at
       FROM deliveries d JOIN markets m ON m.id=d.market_id
       WHERE d.driver_id=? AND d.date=?
       AND m.id NOT IN (SELECT market_id FROM orders WHERE driver_id=? AND date=?)
@@ -114,8 +119,9 @@ router.get('/tomorrow-orders', async (req, res) => {
     const driverId = req.session.user.id;
     const date = req.query.date || today();
 
+    const holidays = await getHolidays();
     // Calculate the delivery date (next working day — skip Sunday)
-    const deliveryDate = nextWorkingDay(date);
+    const deliveryDate = nextWorkingDay(date, holidays);
     
     const nextDay = new Date(date + 'T12:00:00');
     nextDay.setDate(nextDay.getDate() + 1);
@@ -157,7 +163,18 @@ router.get('/market/:marketId', async (req, res) => {
     const market = await db.getAsync('SELECT * FROM markets WHERE id=? AND active=1', [marketId]);
     if (!market) return res.redirect('/driver');
 
-    const articles = await db.allAsync('SELECT * FROM articles WHERE active=1 ORDER BY sort_order');
+    let articles;
+    if (market.is_large) {
+      // Large market: show only articles explicitly assigned to this market
+      articles = await db.allAsync(`
+        SELECT a.* FROM articles a
+        JOIN market_articles ma ON ma.article_id = a.id
+        WHERE ma.market_id = ? AND a.active = 1
+        ORDER BY a.sort_order`, [marketId]);
+    } else {
+      // Normal market: show only standard (non-market-specific) articles
+      articles = await db.allAsync('SELECT * FROM articles WHERE active=1 AND is_market_article=0 ORDER BY sort_order');
+    }
     const delivery = await db.getAsync('SELECT * FROM deliveries WHERE driver_id=? AND market_id=? AND date=?', [driverId, marketId, date]);
 
     const itemsMap = {};
@@ -168,9 +185,10 @@ router.get('/market/:marketId', async (req, res) => {
 
     // Pre-fill delivered from previous working day's next_day_qty (only when opening today with no delivery yet)
     // If today is Monday, look back to Saturday (skip Sunday which is non-working)
+    const holidays = await getHolidays();
     const nextDayMap = {};
     if (!delivery && isToday) {
-      const prevDate = prevWorkingDay(date);
+      const prevDate = prevWorkingDay(date, holidays);
       const yDelivery = await db.getAsync('SELECT * FROM deliveries WHERE driver_id=? AND market_id=? AND date=?', [driverId, marketId, prevDate]);
       if (yDelivery) {
         const yItems = await db.allAsync('SELECT * FROM delivery_items WHERE delivery_id=?', [yDelivery.id]);
@@ -234,9 +252,10 @@ router.get('/loading-list', async (req, res) => {
 
     // Pre-fill from previous working day aggregate next_day_qty if no list yet
     // If today is Monday, use Saturday (skip Sunday which is non-working)
+    const holidays = await getHolidays();
     const nextDayMap = {};
     if (!loadingList) {
-      const prevDate = prevWorkingDay(date);
+      const prevDate = prevWorkingDay(date, holidays);
       const nd = await db.allAsync(`
         SELECT di.article_id, SUM(di.next_day_qty) total_qty
         FROM delivery_items di JOIN deliveries d ON d.id=di.delivery_id

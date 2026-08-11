@@ -110,6 +110,24 @@
     .ctrl-title { font-size: 15px; font-weight: 700; color: #1e293b; }
     .ctrl-sub   { font-size: 12px; color: #94a3b8; margin-top: 2px; }
     .ctrl-chev  { color: #cbd5e1; font-size: 18px; }
+    
+    .tab-bar {
+      display: flex; gap: 4px; margin: 16px;
+      background: #f1f5f9; border-radius: 12px; padding: 4px; border: 1px solid #e2e8f0;
+    }
+    .tab-btn {
+      flex: 1; padding: 10px 16px; border: none; border-radius: 10px;
+      background: transparent; color: #64748b; font-weight: 700; font-size: 14px;
+      cursor: pointer; transition: all .2s;
+    }
+    .tab-btn.active {
+      background: #2563eb; color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .tab-btn.active-large {
+      background: #7c3aed; color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
   </style>
 </head>
 <body>
@@ -210,51 +228,110 @@
       </a>
     </div>
 
-    <!-- Assigned markets -->
-    <% if (assigned.length > 0) { %>
-    <div class="section-title">📋 <%= isToday ? 'Мои пазари денес' : 'Пазари за ' + date %></div>
-    <% assigned.forEach(m => { %>
-      <a href="/driver/market/<%= m.id %>?date=<%= date %>" class="market-card <%= m.submitted_at ? 'done' : '' %>">
-        <div class="market-icon"><%= m.submitted_at ? '✅' : '🏪' %></div>
-        <div class="market-info">
-          <div class="mname"><%= m.name %></div>
-          <% if(m.address){ %><div class="maddr">📍 <%= m.address %></div><% } %>
-        </div>
-        <div class="market-status">
-          <div class="status-dot <%= m.submitted_at ? 'done' : '' %>"></div>
-          <% if(m.submitted_at){ %><div class="status-time"><%= new Date(m.submitted_at).toLocaleTimeString('mk-MK',{hour:'2-digit',minute:'2-digit'}) %></div><% } %>
-        </div>
-      </a>
-    <% }) %>
-    <% } %>
+    <% 
+      const normalAssigned = assigned.filter(m => !m.is_large);
+      const largeAssigned = assigned.filter(m => m.is_large);
+      const extraNormal = extra.filter(m => !m.is_large);
+      const extraLarge = extra.filter(m => m.is_large);
+    %>
 
-    <!-- Extra submitted markets -->
-    <% if (extra.length > 0) { %>
-    <div class="section-title">➕ Дополнителни пазари</div>
-    <% extra.forEach(m => { %>
-      <a href="/driver/market/<%= m.id %>?date=<%= date %>" class="market-card done">
-        <div class="market-icon">✅</div>
-        <div class="market-info">
-          <div class="mname"><%= m.name %></div>
-          <% if(m.address){ %><div class="maddr">📍 <%= m.address %></div><% } %>
-        </div>
-        <div class="market-status">
-          <div class="status-dot done"></div>
-          <% if(m.submitted_at){ %><div class="status-time"><%= new Date(m.submitted_at).toLocaleTimeString('mk-MK',{hour:'2-digit',minute:'2-digit'}) %></div><% } %>
-        </div>
-      </a>
-    <% }) %>
-    <% } %>
+    <!-- Normal assigned markets -->
+    <div class="tab-bar">
+      <button class="tab-btn active" id="tab-normal-btn" onclick="switchTab('normal')">🏪 Обични пазари</button>
+      <button class="tab-btn" id="tab-large-btn" onclick="switchTab('large')">🏬 Големи маркети</button>
+    </div>
 
-    <% if (assigned.length === 0 && extra.length === 0) { %>
-    <div style="text-align:center;padding:60px 20px">
-      <div style="font-size:48px;margin-bottom:12px">📭</div>
-      <div style="font-size:16px;font-weight:700;color:#64748b"><%= isToday ? 'Нема налози за денес' : 'Нема записи за ' + date %></div>
-      <% if (isToday) { %>
-      <div style="font-size:13px;color:#94a3b8;margin-top:6px">Додај пазар со копчето подолу</div>
+    <div class="tab-panel active" id="tab-normal">
+      <% if (normalAssigned.length > 0) { %>
+      <div class="section-title">📋 <%= isToday ? 'Мои пазари денес' : 'Пазари за ' + date %></div>
+      <% normalAssigned.forEach(m => { %>
+        <a href="/driver/market/<%= m.id %>?date=<%= date %>" class="market-card <%= m.submitted_at ? 'done' : '' %>">
+          <div class="market-icon"><%= m.submitted_at ? '✅' : '🏪' %></div>
+          <div class="market-info">
+            <div class="mname"><%= m.name %></div>
+            <% if(m.address){ %><div class="maddr">📍 <%= m.address %></div><% } %>
+          </div>
+          <div class="market-status">
+            <div class="status-dot <%= m.submitted_at ? 'done' : '' %>"></div>
+            <% if(m.submitted_at){ %><div class="status-time"><%= new Date(m.submitted_at).toLocaleTimeString('mk-MK',{hour:'2-digit',minute:'2-digit'}) %></div><% } %>
+          </div>
+        </a>
+      <% }) %>
+      <% } %>
+
+      <!-- Extra submitted markets (not large) -->
+      <% if (extraNormal.length > 0) { %>
+      <div class="section-title">➕ Дополнителни пазари</div>
+      <% extraNormal.forEach(m => { %>
+        <a href="/driver/market/<%= m.id %>?date=<%= date %>" class="market-card done">
+          <div class="market-icon">✅</div>
+          <div class="market-info">
+            <div class="mname"><%= m.name %></div>
+            <% if(m.address){ %><div class="maddr">📍 <%= m.address %></div><% } %>
+          </div>
+          <div class="market-status">
+            <div class="status-dot done"></div>
+            <% if(m.submitted_at){ %><div class="status-time"><%= new Date(m.submitted_at).toLocaleTimeString('mk-MK',{hour:'2-digit',minute:'2-digit'}) %></div><% } %>
+          </div>
+        </a>
+      <% }) %>
+      <% } %>
+
+      <% if (normalAssigned.length === 0 && extraNormal.length === 0) { %>
+      <div style="text-align:center;padding:60px 20px">
+        <div style="font-size:48px;margin-bottom:12px">📭</div>
+        <div style="font-size:16px;font-weight:700;color:#64748b"><%= isToday ? 'Нема налози за денес' : 'Нема записи за ' + date %></div>
+        <% if (isToday) { %>
+        <div style="font-size:13px;color:#94a3b8;margin-top:6px">Додај пазар со копчето подолу</div>
+        <% } %>
+      </div>
       <% } %>
     </div>
-    <% } %>
+
+    <!-- Large markets section -->
+    <div class="tab-panel" id="tab-large">
+      <% if (largeAssigned.length > 0) { %>
+      <div class="section-title">🏬 Големи маркети</div>
+      <% largeAssigned.forEach(m => { %>
+        <a href="/driver/market/<%= m.id %>?date=<%= date %>" class="market-card <%= m.submitted_at ? 'done' : '' %>" style="border-left: 4px solid #7c3aed;">
+          <div class="market-icon"><%= m.submitted_at ? '✅' : '🏬' %></div>
+          <div class="market-info">
+            <div class="mname"><%= m.name %> <span style="font-size:10px;background:#ede9fe;color:#7c3aed;padding:2px 6px;border-radius:4px;font-weight:700;margin-left:4px">ГОЛЕМ</span></div>
+            <% if(m.address){ %><div class="maddr">📍 <%= m.address %></div><% } %>
+          </div>
+          <div class="market-status">
+            <div class="status-dot <%= m.submitted_at ? 'done' : '' %>"></div>
+            <% if(m.submitted_at){ %><div class="status-time"><%= new Date(m.submitted_at).toLocaleTimeString('mk-MK',{hour:'2-digit',minute:'2-digit'}) %></div><% } %>
+          </div>
+        </a>
+      <% }) %>
+      <% } %>
+      
+      <!-- Extra submitted large markets -->
+      <% if (extraLarge.length > 0) { %>
+      <div class="section-title">➕ Дополнителни големи маркети</div>
+      <% extraLarge.forEach(m => { %>
+        <a href="/driver/market/<%= m.id %>?date=<%= date %>" class="market-card <%= m.submitted_at ? 'done' : '' %>" style="border-left: 4px solid #7c3aed;">
+          <div class="market-icon"><%= m.submitted_at ? '✅' : '🏬' %></div>
+          <div class="market-info">
+            <div class="mname"><%= m.name %> <span style="font-size:10px;background:#ede9fe;color:#7c3aed;padding:2px 6px;border-radius:4px;font-weight:700;margin-left:4px">ГОЛЕМ</span></div>
+            <% if(m.address){ %><div class="maddr">📍 <%= m.address %></div><% } %>
+          </div>
+          <div class="market-status">
+            <div class="status-dot <%= m.submitted_at ? 'done' : '' %>"></div>
+            <% if(m.submitted_at){ %><div class="status-time"><%= new Date(m.submitted_at).toLocaleTimeString('mk-MK',{hour:'2-digit',minute:'2-digit'}) %></div><% } %>
+          </div>
+        </a>
+      <% }) %>
+      <% } %>
+
+      <% if (largeAssigned.length === 0 && extraLarge.length === 0) { %>
+      <div style="text-align:center;padding:60px 20px">
+        <div style="font-size:48px;margin-bottom:12px">🏬</div>
+        <div style="font-size:16px;font-weight:700;color:#64748b">Нема големи маркети за денес</div>
+      </div>
+      <% } %>
+    </div>
 
     <div style="height:100px"></div>
   </div>
@@ -286,6 +363,13 @@
 </div>
 
 <script>
+function switchTab(tab) {
+  document.getElementById('tab-normal').classList.toggle('active', tab === 'normal');
+  document.getElementById('tab-large').classList.toggle('active', tab === 'large');
+  document.getElementById('tab-normal-btn').classList.toggle('active', tab === 'normal');
+  document.getElementById('tab-large-btn').classList.toggle('active-large', tab === 'large');
+}
+
 function goToMarket(id){ window.location.href='/driver/market/'+id+'?date=<%= date %>'; }
 
 const marketSearch = document.getElementById('market-search');

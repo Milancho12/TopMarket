@@ -81,6 +81,12 @@ async function init() {
 
   // Migration: add external_code to articles
   try { await db.runAsync('ALTER TABLE articles ADD COLUMN external_code TEXT'); } catch (e) { }
+  // Migration: add is_market_article to articles (0=standard, 1=market-specific private label)
+  try { await db.runAsync('ALTER TABLE articles ADD COLUMN is_market_article INTEGER NOT NULL DEFAULT 0'); } catch (e) { }
+
+  // Migration: large markets support
+  try { await db.runAsync('ALTER TABLE markets ADD COLUMN is_large INTEGER NOT NULL DEFAULT 0'); } catch (e) { }
+  try { await db.runAsync('ALTER TABLE markets ADD COLUMN portal_column_id TEXT'); } catch (e) { }
 
   await db.runAsync(`CREATE TABLE IF NOT EXISTS driver_markets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -101,6 +107,17 @@ async function init() {
     article_id INTEGER NOT NULL, loaded_qty INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (loading_list_id) REFERENCES loading_lists(id) ON DELETE CASCADE,
     UNIQUE(loading_list_id, article_id))`);
+
+  await db.runAsync(`CREATE TABLE IF NOT EXISTS holidays (
+    date TEXT PRIMARY KEY)`);
+
+  // market_articles: links articles (including private-label ones) to specific large markets
+  await db.runAsync(`CREATE TABLE IF NOT EXISTS market_articles (
+    market_id INTEGER NOT NULL,
+    article_id INTEGER NOT NULL,
+    FOREIGN KEY (market_id) REFERENCES markets(id) ON DELETE CASCADE,
+    FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE,
+    PRIMARY KEY (market_id, article_id))`);
 
   // Seed admin
   const admin = await db.getAsync("SELECT id FROM users WHERE role='admin'");

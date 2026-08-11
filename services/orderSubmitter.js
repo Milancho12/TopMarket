@@ -37,21 +37,54 @@ async function submitOrdersForAccount(account) {
   // 1. Fetch items for all drivers in this account
   const driverTasks = [];
   for (const driver of account.drivers) {
-    const items = await db.allAsync(`
+    // Normal market next_day quantities (is_market_article=0, market is NOT large)
+    const normalItems = await db.allAsync(`
       SELECT a.code, a.external_code, a.name, a.sort_order,
              COALESCE(SUM(di.next_day_qty), 0) total_qty
       FROM delivery_items di
       JOIN deliveries d ON d.id = di.delivery_id
       JOIN articles a ON a.id = di.article_id
+      JOIN markets m ON m.id = d.market_id
       WHERE d.driver_id=? AND d.date=? AND di.next_day_qty > 0
+        AND m.is_large = 0
       GROUP BY a.id
       ORDER BY a.sort_order`, [driver.id, date]);
 
-    if (items.length > 0) {
-      driverTasks.push({ driver, items });
+    // Large market next_day quantities — each large market gets its OWN column
+    const largeMarkets = await db.allAsync(`
+      SELECT DISTINCT m.id, m.name, m.portal_column_id
+      FROM markets m
+      JOIN deliveries d ON d.market_id = m.id
+      WHERE d.driver_id = ? AND d.date = ? AND m.is_large = 1 AND m.active = 1`, [driver.id, date]);
+
+    const largeMarketTasks = [];
+    for (const lm of largeMarkets) {
+      if (!lm.portal_column_id) continue;
+      const lmItems = await db.allAsync(`
+        SELECT a.code, a.external_code, a.name, a.sort_order,
+               COALESCE(SUM(di.next_day_qty), 0) total_qty
+        FROM delivery_items di
+        JOIN deliveries d ON d.id = di.delivery_id
+        JOIN articles a ON a.id = di.article_id
+        WHERE d.driver_id=? AND d.market_id=? AND d.date=? AND di.next_day_qty > 0
+        GROUP BY a.id
+        ORDER BY a.sort_order`, [driver.id, lm.id, date]);
+      if (lmItems.length > 0) {
+        largeMarketTasks.push({
+          driver: { ...driver, portal_column_id: lm.portal_column_id, name: lm.name },
+          items: lmItems
+        });
+      }
+    }
+
+    if (normalItems.length > 0) {
+      driverTasks.push({ driver, items: normalItems });
     } else {
       console.log(`Account ${account.username}: Vozach ${driver.name} nema narachki za utre.`);
     }
+
+    // Append large market tasks right after this driver's normal task
+    driverTasks.push(...largeMarketTasks);
   }
 
   if (driverTasks.length === 0) {

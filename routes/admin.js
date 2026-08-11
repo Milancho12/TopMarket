@@ -25,17 +25,17 @@ router.get('/', async (req, res) => {
   try {
     const date = req.query.date || today();
     const stats = {
-      deliveries: (await db.getAsync('SELECT COUNT(*) c FROM deliveries WHERE date=?', [date])).c,
-      delivered: (await db.getAsync('SELECT COALESCE(SUM(di.delivered_qty),0) c FROM delivery_items di JOIN deliveries d ON d.id=di.delivery_id WHERE d.date=?', [date])).c,
-      returned: (await db.getAsync('SELECT COALESCE(SUM(di.returned_qty),0) c FROM delivery_items di JOIN deliveries d ON d.id=di.delivery_id WHERE d.date=?', [date])).c,
-      markets: (await db.getAsync('SELECT COUNT(*) c FROM markets WHERE active=1')).c,
+      deliveries: (await db.getAsync('SELECT COUNT(*) c FROM deliveries d JOIN markets m ON m.id=d.market_id WHERE d.date=? AND m.is_large=0', [date])).c,
+      delivered: (await db.getAsync('SELECT COALESCE(SUM(di.delivered_qty),0) c FROM delivery_items di JOIN deliveries d ON d.id=di.delivery_id JOIN markets m ON m.id=d.market_id WHERE d.date=? AND m.is_large=0', [date])).c,
+      returned: (await db.getAsync('SELECT COALESCE(SUM(di.returned_qty),0) c FROM delivery_items di JOIN deliveries d ON d.id=di.delivery_id JOIN markets m ON m.id=d.market_id WHERE d.date=? AND m.is_large=0', [date])).c,
+      markets: (await db.getAsync('SELECT COUNT(*) c FROM markets WHERE active=1 AND is_large=0')).c,
       drivers: (await db.getAsync("SELECT COUNT(*) c FROM users WHERE role='driver' AND active=1")).c,
     };
     const recent = await db.allAsync(`
       SELECT d.id, d.date, d.submitted_at, d.edited_at, u.name driver_name, m.name market_name,
              COALESCE(SUM(di.delivered_qty),0) tot_del, COALESCE(SUM(di.returned_qty),0) tot_ret
       FROM deliveries d JOIN users u ON u.id=d.driver_id JOIN markets m ON m.id=d.market_id
-      LEFT JOIN delivery_items di ON di.delivery_id=d.id WHERE d.date=?
+      LEFT JOIN delivery_items di ON di.delivery_id=d.id WHERE d.date=? AND m.is_large=0
       GROUP BY d.id ORDER BY d.submitted_at DESC`, [date]);
     res.render('admin/dashboard', { stats, recent, date });
   } catch (e) { res.status(500).send(e.message); }
@@ -80,9 +80,10 @@ router.post('/settings', async (req, res) => {
 });
 
 router.get('/markets', async (req, res) => {
-  const markets = await db.allAsync('SELECT m.*, c.name company_name FROM markets m LEFT JOIN companies c ON c.id=m.company_id WHERE m.active=1 ORDER BY m.name');
+  const markets = await db.allAsync('SELECT m.*, c.name company_name FROM markets m LEFT JOIN companies c ON c.id=m.company_id WHERE m.active=1 ORDER BY m.is_large, m.name');
   const companies = await db.allAsync('SELECT id,name FROM companies WHERE active=1 ORDER BY name');
-  res.render('admin/markets', { markets, companies });
+  const allArticles = await db.allAsync('SELECT id,code,name,is_market_article FROM articles WHERE active=1 ORDER BY is_market_article, sort_order');
+  res.render('admin/markets', { markets, companies, allArticles });
 });
 
 router.get('/articles', async (req, res) => {
@@ -112,16 +113,16 @@ router.get('/reports', async (req, res) => {
   const t = today();
   const f = { date_from: req.query.date_from || t, date_to: req.query.date_to || t, driver_id: req.query.driver_id || '', market_id: req.query.market_id || '', company_id: req.query.company_id || '' };
   const drivers = await db.allAsync("SELECT id,name FROM users WHERE role='driver' ORDER BY name");
-  const markets = await db.allAsync('SELECT id, name, company_id FROM markets ORDER BY name');
+  const markets = await db.allAsync('SELECT id, name, company_id FROM markets WHERE is_large=0 ORDER BY name');
   const companies = await db.allAsync('SELECT id,name FROM companies WHERE active=1 ORDER BY name');
   let q = `SELECT d.id, d.date, d.submitted_at, d.edited_at, d.notes, u.name driver_name, m.name market_name,
            COALESCE(SUM(di.delivered_qty),0) tot_del, COALESCE(SUM(di.returned_qty),0) tot_ret
     FROM deliveries d JOIN users u ON u.id=d.driver_id JOIN markets m ON m.id=d.market_id
-    LEFT JOIN delivery_items di ON di.delivery_id=d.id WHERE 1=1`;
+    LEFT JOIN delivery_items di ON di.delivery_id=d.id WHERE m.is_large=0`;
 
   let tQ = `SELECT COALESCE(SUM(di.delivered_qty),0) g_del, COALESCE(SUM(di.returned_qty),0) g_ret
             FROM deliveries d JOIN markets m ON m.id=d.market_id
-            LEFT JOIN delivery_items di ON di.delivery_id=d.id WHERE 1=1`;
+            LEFT JOIN delivery_items di ON di.delivery_id=d.id WHERE m.is_large=0`;
 
   const params = [];
   if (f.date_from) { q += ' AND d.date>=?'; tQ += ' AND d.date>=?'; params.push(f.date_from); }
@@ -157,7 +158,7 @@ router.get('/reports/word', async (req, res) => {
         JOIN deliveries d ON d.id = di.delivery_id
         JOIN articles a ON a.id = di.article_id
         JOIN markets m ON m.id = d.market_id
-        WHERE m.company_id=? AND d.date>=? AND d.date<=?
+        WHERE m.company_id=? AND d.date>=? AND d.date<=? AND m.is_large=0
         GROUP BY a.id
         HAVING net_qty > 0
         ORDER BY a.sort_order`, [company_id, date_from, date_to]);
@@ -191,9 +192,9 @@ router.get('/reports/word', async (req, res) => {
     } else {
       let marketsToExport;
       if (market_id) {
-        marketsToExport = await db.allAsync('SELECT * FROM markets WHERE id=?', [market_id]);
+        marketsToExport = await db.allAsync('SELECT * FROM markets WHERE id=? AND is_large=0', [market_id]);
       } else {
-        marketsToExport = await db.allAsync('SELECT * FROM markets WHERE active=1 ORDER BY name');
+        marketsToExport = await db.allAsync('SELECT * FROM markets WHERE active=1 AND is_large=0 ORDER BY name');
       }
 
       for (const market of marketsToExport) {
@@ -268,11 +269,12 @@ router.get('/reports/word', async (req, res) => {
 
 router.get('/invoices', async (req, res) => {
   const t = today();
-  const markets = await db.allAsync('SELECT id,name FROM markets WHERE active=1 ORDER BY name');
+  const markets = await db.allAsync('SELECT id,name FROM markets WHERE active=1 AND is_large=0 ORDER BY name');
   const f = { market_id: req.query.market_id || '', date_from: req.query.date_from || t, date_to: req.query.date_to || t };
   let invoiceData = null, selMarket = null;
   if (f.market_id && f.date_from && f.date_to) {
-    selMarket = await db.getAsync('SELECT * FROM markets WHERE id=?', [f.market_id]);
+    selMarket = await db.getAsync('SELECT * FROM markets WHERE id=? AND is_large=0', [f.market_id]);
+    if (!selMarket) return res.render('admin/invoices', { markets, invoiceData: null, selMarket: null, filters: f });
     const rows = await db.allAsync(`
       SELECT a.code, a.name, a.price, a.unit,
              SUM(di.delivered_qty) tot_del, SUM(di.returned_qty) tot_ret,
@@ -290,7 +292,7 @@ router.get('/zito-report', async (req, res) => {
   try {
     const t = today();
     const drivers = await db.allAsync("SELECT id,name FROM users WHERE role='driver' ORDER BY name");
-    const markets = await db.allAsync('SELECT id, name, company_id FROM markets WHERE active=1 ORDER BY name');
+    const markets = await db.allAsync('SELECT id, name, company_id FROM markets WHERE active=1 AND is_large=0 ORDER BY name');
     const companies = await db.allAsync('SELECT id,name FROM companies WHERE active=1 ORDER BY name');
     const f = { date_from: req.query.date_from || t, date_to: req.query.date_to || t, driver_id: req.query.driver_id || '', market_id: req.query.market_id || '', company_id: req.query.company_id || '' };
     res.render('admin/zito-report', { drivers, markets, companies, filters: f });
@@ -318,7 +320,7 @@ router.get('/zito-report/excel', async (req, res) => {
          JOIN articles a ON a.id = di.article_id
          JOIN markets m ON m.id = d.market_id
          JOIN companies c ON c.id = m.company_id
-         WHERE d.date>=? AND d.date<=? AND m.company_id=?
+         WHERE d.date>=? AND d.date<=? AND m.company_id=? AND m.is_large=0
        `;
       params.push(company_id);
       if (driver_id) { sql += ' AND d.driver_id=?'; params.push(driver_id); }
@@ -335,7 +337,7 @@ router.get('/zito-report/excel', async (req, res) => {
          JOIN deliveries d ON d.id = di.delivery_id
          JOIN articles a ON a.id = di.article_id
          JOIN markets m ON m.id = d.market_id
-         WHERE d.date>=? AND d.date<=?`;
+         WHERE d.date>=? AND d.date<=? AND m.is_large=0`;
       if (driver_id) { sql += ' AND d.driver_id=?'; params.push(driver_id); }
       if (market_id) { sql += ' AND d.market_id=?'; params.push(market_id); }
       sql += ' GROUP BY m.id, a.id HAVING net_qty > 0 ORDER BY m.name, a.sort_order';
@@ -520,10 +522,6 @@ router.get('/return-by-client', async (req, res) => {
       article_code: req.query.article_code || '',
       company_id: req.query.company_id || ''
     };
-    const markets = await db.allAsync('SELECT id, name, company_id FROM markets WHERE active=1 ORDER BY name');
-    const companies = await db.allAsync('SELECT id, name FROM companies WHERE active=1 ORDER BY name');
-    const articles = await db.allAsync('SELECT id,code,name FROM articles WHERE active=1 ORDER BY sort_order');
-    let rows = [];
     let sql = `
       SELECT m.name market_name, m.client_code, a.code art_code, a.name art_name,
              SUM(di.delivered_qty) tot_del,
@@ -533,13 +531,16 @@ router.get('/return-by-client', async (req, res) => {
       JOIN deliveries d ON d.id = di.delivery_id
       JOIN markets m    ON m.id = d.market_id
       JOIN articles a   ON a.id = di.article_id
-      WHERE d.date>=? AND d.date<=?`;
+      WHERE d.date>=? AND d.date<=? AND m.is_large=0`;
     const params = [f.date_from, f.date_to];
+    const markets = await db.allAsync('SELECT id, name, company_id FROM markets WHERE active=1 AND is_large=0 ORDER BY name');
+    const companies = await db.allAsync('SELECT id, name FROM companies WHERE active=1 ORDER BY name');
+    const articles = await db.allAsync('SELECT id,code,name FROM articles WHERE active=1 AND is_market_article=0 ORDER BY sort_order');
     if (f.company_id) { sql += ' AND m.company_id=?'; params.push(f.company_id); }
     if (f.market_id) { sql += ' AND d.market_id=?'; params.push(f.market_id); }
     if (f.article_code) { sql += ' AND a.code=?'; params.push(f.article_code); }
     sql += ' GROUP BY m.id, a.id HAVING tot_ret > 0 ORDER BY m.name, a.sort_order';
-    rows = await db.allAsync(sql, params);
+    const rows = await db.allAsync(sql, params);
     res.render('admin/return-by-client', { rows, markets, companies, articles, filters: f });
   } catch (e) { res.status(500).send(e.message); }
 });
@@ -560,7 +561,8 @@ router.get('/return-by-group', async (req, res) => {
         FROM delivery_items di
         JOIN deliveries d ON d.id = di.delivery_id
         JOIN articles a   ON a.id = di.article_id
-        WHERE d.date>=? AND d.date<=?
+        JOIN markets m    ON m.id = d.market_id
+        WHERE d.date>=? AND d.date<=? AND m.is_large=0
           AND a.code IN (${placeholders})
         GROUP BY a.id
         ORDER BY a.sort_order`, [f.date_from, f.date_to, ...g.codes]);
@@ -581,7 +583,7 @@ router.get('/bread-report/:group', async (req, res) => {
       date_to: req.query.date_to || t,
       market_id: req.query.market_id || ''
     };
-    const markets = await db.allAsync('SELECT id,name FROM markets WHERE active=1 ORDER BY name');
+    const markets = await db.allAsync('SELECT id,name FROM markets WHERE active=1 AND is_large=0 ORDER BY name');
     const placeholders = group.codes.map(() => '?').join(',');
     let sql = `
       SELECT m.name market_name, a.code art_code, a.name art_name,
@@ -594,7 +596,7 @@ router.get('/bread-report/:group', async (req, res) => {
       JOIN deliveries d ON d.id = di.delivery_id
       JOIN markets m    ON m.id = d.market_id
       JOIN articles a   ON a.id = di.article_id
-      WHERE d.date>=? AND d.date<=?
+      WHERE d.date>=? AND d.date<=? AND m.is_large=0
         AND a.code IN (${placeholders})`;
     const params = [f.date_from, f.date_to, ...group.codes];
     if (f.market_id) { sql += ' AND d.market_id=?'; params.push(f.market_id); }
@@ -608,17 +610,38 @@ router.get('/bread-report/:group', async (req, res) => {
 
 router.post('/api/markets', async (req, res) => {
   try {
-    const { name, address, city, contact_name, contact_phone, client_code, object_code, company_id } = req.body;
+    const { name, address, city, contact_name, contact_phone, client_code, object_code, company_id, is_large, portal_column_id } = req.body;
     if (!name) return res.json({ success: false, error: 'Назив е задолжителен' });
-    const r = await db.runAsync('INSERT INTO markets (name,address,city,contact_name,contact_phone,client_code,object_code,company_id) VALUES (?,?,?,?,?,?,?,?)', [name, address || null, city || null, contact_name || null, contact_phone || null, client_code || null, object_code || null, company_id || null]);
+    const r = await db.runAsync('INSERT INTO markets (name,address,city,contact_name,contact_phone,client_code,object_code,company_id,is_large,portal_column_id) VALUES (?,?,?,?,?,?,?,?,?,?)', [name, address || null, city || null, contact_name || null, contact_phone || null, client_code || null, object_code || null, company_id || null, is_large ? 1 : 0, portal_column_id || null]);
     res.json({ success: true, id: r.lastID });
   } catch (e) { res.json({ success: false, error: e.message }); }
 });
 
 router.put('/api/markets/:id', async (req, res) => {
   try {
-    const { name, address, city, contact_name, contact_phone, client_code, object_code, company_id } = req.body;
-    await db.runAsync('UPDATE markets SET name=?,address=?,city=?,contact_name=?,contact_phone=?,client_code=?,object_code=?,company_id=? WHERE id=?', [name, address || null, city || null, contact_name || null, contact_phone || null, client_code || null, object_code || null, company_id || null, req.params.id]);
+    const { name, address, city, contact_name, contact_phone, client_code, object_code, company_id, is_large, portal_column_id } = req.body;
+    await db.runAsync('UPDATE markets SET name=?,address=?,city=?,contact_name=?,contact_phone=?,client_code=?,object_code=?,company_id=?,is_large=?,portal_column_id=? WHERE id=?', [name, address || null, city || null, contact_name || null, contact_phone || null, client_code || null, object_code || null, company_id || null, is_large ? 1 : 0, portal_column_id || null, req.params.id]);
+    res.json({ success: true });
+  } catch (e) { res.json({ success: false, error: e.message }); }
+});
+
+// ── API: MARKET ARTICLES (for large markets) ───────────────
+
+router.get('/api/markets/:id/articles', async (req, res) => {
+  try {
+    const rows = await db.allAsync('SELECT article_id FROM market_articles WHERE market_id=?', [req.params.id]);
+    res.json(rows);
+  } catch (e) { res.json({ error: e.message }); }
+});
+
+router.post('/api/markets/:id/articles', async (req, res) => {
+  try {
+    const { article_ids } = req.body; // array of ints
+    // Replace all assignments for this market
+    await db.runAsync('DELETE FROM market_articles WHERE market_id=?', [req.params.id]);
+    for (const aid of (article_ids || [])) {
+      await db.runAsync('INSERT OR IGNORE INTO market_articles (market_id, article_id) VALUES (?,?)', [req.params.id, aid]);
+    }
     res.json({ success: true });
   } catch (e) { res.json({ success: false, error: e.message }); }
 });
@@ -632,18 +655,18 @@ router.delete('/api/markets/:id', async (req, res) => {
 
 router.post('/api/articles', async (req, res) => {
   try {
-    const { code, name, price, unit, external_code } = req.body;
+    const { code, name, price, unit, external_code, is_market_article } = req.body;
     if (!name) return res.json({ success: false, error: 'Назив е задолжителен' });
     const mx = await db.getAsync('SELECT MAX(sort_order) mo FROM articles WHERE active=1');
-    const r = await db.runAsync('INSERT INTO articles (code,name,price,unit,sort_order,external_code) VALUES (?,?,?,?,?,?)', [code || '', name, parseFloat(price) || 0, unit || 'kom', (mx.mo || 0) + 1, external_code || null]);
+    const r = await db.runAsync('INSERT INTO articles (code,name,price,unit,sort_order,external_code,is_market_article) VALUES (?,?,?,?,?,?,?)', [code || '', name, parseFloat(price) || 0, unit || 'kom', (mx.mo || 0) + 1, external_code || null, is_market_article ? 1 : 0]);
     res.json({ success: true, id: r.lastID });
   } catch (e) { res.json({ success: false, error: e.message }); }
 });
 
 router.put('/api/articles/:id', async (req, res) => {
   try {
-    const { code, name, price, unit, external_code } = req.body;
-    await db.runAsync('UPDATE articles SET code=?,name=?,price=?,unit=?,external_code=? WHERE id=?', [code || '', name, parseFloat(price) || 0, unit || 'kom', external_code || null, req.params.id]);
+    const { code, name, price, unit, external_code, is_market_article } = req.body;
+    await db.runAsync('UPDATE articles SET code=?,name=?,price=?,unit=?,external_code=?,is_market_article=? WHERE id=?', [code || '', name, parseFloat(price) || 0, unit || 'kom', external_code || null, is_market_article ? 1 : 0, req.params.id]);
     res.json({ success: true });
   } catch (e) { res.json({ success: false, error: e.message }); }
 });
@@ -796,6 +819,31 @@ router.put('/api/companies/:id', async (req, res) => {
     const { name } = req.body;
     if (!name) return res.json({ success: false, error: 'Назив е задолжителен' });
     await db.runAsync('UPDATE companies SET name=? WHERE id=?', [name, req.params.id]);
+    res.json({ success: true });
+  } catch (e) { res.json({ success: false, error: e.message }); }
+});
+
+// ── API: HOLIDAYS ─────────────────────────────────────────
+
+router.get('/api/holidays', async (req, res) => {
+  try {
+    const rows = await db.allAsync('SELECT date FROM holidays ORDER BY date DESC');
+    res.json(rows);
+  } catch (e) { res.json({ error: e.message }); }
+});
+
+router.post('/api/holidays', async (req, res) => {
+  try {
+    const { date } = req.body;
+    if (!date) return res.json({ success: false, error: 'Датумот е задолжителен' });
+    await db.runAsync('INSERT OR IGNORE INTO holidays (date) VALUES (?)', [date]);
+    res.json({ success: true });
+  } catch (e) { res.json({ success: false, error: e.message }); }
+});
+
+router.delete('/api/holidays/:date', async (req, res) => {
+  try {
+    await db.runAsync('DELETE FROM holidays WHERE date=?', [req.params.date]);
     res.json({ success: true });
   } catch (e) { res.json({ success: false, error: e.message }); }
 });
