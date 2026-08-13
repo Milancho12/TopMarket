@@ -127,28 +127,39 @@ router.get('/tomorrow-orders', async (req, res) => {
     nextDay.setDate(nextDay.getDate() + 1);
     const isSundaySkipped = deliveryDate !== nextDay.toISOString().split('T')[0];
 
-    // Aggregate next_day_qty across all markets for this driver on chosen date
-    const items = await db.allAsync(`
+    // Aggregate next_day_qty across normal markets for this driver on chosen date
+    const normalItems = await db.allAsync(`
       SELECT a.code, a.name, a.sort_order,
              COALESCE(SUM(di.next_day_qty), 0) total_qty
       FROM delivery_items di
       JOIN deliveries d ON d.id = di.delivery_id
       JOIN articles a ON a.id = di.article_id
-      WHERE d.driver_id=? AND d.date=? AND di.next_day_qty > 0
+      JOIN markets m ON m.id = d.market_id
+      WHERE d.driver_id=? AND d.date=? AND m.is_large=0 AND di.next_day_qty > 0
       GROUP BY a.id
       ORDER BY a.sort_order`, [driverId, date]);
 
-    // Also get per-market breakdown
-    const byMarket = await db.allAsync(`
+    // Normal markets per-market breakdown
+    const normalByMarket = await db.allAsync(`
       SELECT m.name market_name, a.code, a.name art_name, di.next_day_qty
       FROM delivery_items di
       JOIN deliveries d ON d.id = di.delivery_id
       JOIN articles a ON a.id = di.article_id
       JOIN markets m ON m.id = d.market_id
-      WHERE d.driver_id=? AND d.date=? AND di.next_day_qty > 0
+      WHERE d.driver_id=? AND d.date=? AND m.is_large=0 AND di.next_day_qty > 0
       ORDER BY m.name, a.sort_order`, [driverId, date]);
 
-    res.render('driver/tomorrow-orders', { date, deliveryDate, isSundaySkipped, items, byMarket });
+    // Large markets breakdown (also acts as their summary since they are distinct)
+    const largeByMarket = await db.allAsync(`
+      SELECT m.id market_id, m.name market_name, a.code, a.name art_name, di.next_day_qty
+      FROM delivery_items di
+      JOIN deliveries d ON d.id = di.delivery_id
+      JOIN articles a ON a.id = di.article_id
+      JOIN markets m ON m.id = d.market_id
+      WHERE d.driver_id=? AND d.date=? AND m.is_large=1 AND di.next_day_qty > 0
+      ORDER BY m.name, a.sort_order`, [driverId, date]);
+
+    res.render('driver/tomorrow-orders', { date, deliveryDate, isSundaySkipped, normalItems, normalByMarket, largeByMarket });
   } catch(e) { res.status(500).send(e.message); }
 });
 

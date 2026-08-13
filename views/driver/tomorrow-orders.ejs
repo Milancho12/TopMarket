@@ -134,6 +134,14 @@
       font-weight: 700;
     }
     .sunday-skip-notice .icon { font-size: 20px; }
+    
+    /* TABS */
+    .tab-bar { display: flex; gap: 4px; margin: 16px; background: var(--surface2, #f1f5f9); border-radius: 12px; padding: 4px; border: 1px solid var(--border, #e2e8f0); }
+    .tab-btn { flex: 1; padding: 10px 16px; border: none; border-radius: 10px; background: transparent; color: var(--text2, #64748b); font-weight: 700; font-size: 14px; cursor: pointer; transition: all .2s; }
+    .tab-btn.active { background: #2563eb; color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .tab-btn.active-large { background: #7c3aed; color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
   </style>
 </head>
 <body>
@@ -163,73 +171,157 @@
     <button class="btn btn-sm btn-primary" onclick="goToDate()" style="padding:6px 14px">Прикажи</button>
   </div>
 
-  <% if (items.length === 0) { %>
+  <% if (normalItems.length === 0 && largeByMarket.length === 0) { %>
   <div class="empty-orders">
     <div class="big">📭</div>
     <div class="msg">Нема нарачки за <%= date %></div>
     <div class="sub">Внеси нарачки за утре на страницата на пазарот</div>
   </div>
   <% } else { %>
+  
+  <div class="tab-bar">
+    <button class="tab-btn active" id="tab-normal-btn" onclick="switchTab('normal')">🏪 Обични пазари</button>
+    <button class="tab-btn" id="tab-large-btn" onclick="switchTab('large')">🏬 Големи маркети</button>
+  </div>
 
-  <!-- Aggregated summary -->
-  <div class="summary-card">
-    <div class="summary-header">
-      <span>📊</span>
-      <span>Вкупно по артикл</span>
-      <span style="margin-left:auto;font-size:13px;color:var(--text3)"><%= items.length %> артикли</span>
-    </div>
-    <table class="summary-table">
-      <thead>
-        <tr><th>Артикл</th><th style="text-align:right">Количина</th></tr>
-      </thead>
-      <tbody>
-        <% let grandTotal = 0; items.forEach(item => { grandTotal += item.total_qty; %>
-        <tr>
-          <td>
-            <span class="code-badge"><%= item.code %></span>
-            <span><%= item.name %></span>
-          </td>
-          <td><%= item.total_qty %></td>
-        </tr>
+  <div class="tab-panel active" id="tab-normal">
+    <% if (normalItems.length === 0) { %>
+      <div class="empty-orders"><div class="msg">Нема нарачки за обични пазари</div></div>
+    <% } else { %>
+      <!-- Aggregated summary -->
+      <div class="summary-card">
+        <div class="summary-header">
+          <span>📊</span>
+          <span>Вкупно по артикл</span>
+          <span style="margin-left:auto;font-size:13px;color:var(--text3)"><%= normalItems.length %> артикли</span>
+        </div>
+        <table class="summary-table">
+          <thead>
+            <tr><th>Артикл</th><th style="text-align:right">Количина</th></tr>
+          </thead>
+          <tbody>
+            <% let grandTotal = 0; normalItems.forEach(item => { grandTotal += item.total_qty; %>
+            <tr>
+              <td>
+                <span class="code-badge"><%= item.code %></span>
+                <span><%= item.name %></span>
+              </td>
+              <td><%= item.total_qty %></td>
+            </tr>
+            <% }) %>
+          </tbody>
+          <tfoot>
+            <tr style="background: var(--surface2); border-top: 2px solid var(--primary);">
+              <td style="font-weight: 800; font-size: 16px; padding: 14px 16px;">Вкупно сите артикли:</td>
+              <td style="font-weight: 800; font-size: 22px; color: var(--primary); padding: 14px 16px; text-align: right;"><%= grandTotal %></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <!-- Per-market breakdown -->
+      <%
+        const normalMarkets = {};
+        normalByMarket.forEach(r => {
+          if (!normalMarkets[r.market_name]) normalMarkets[r.market_name] = [];
+          normalMarkets[r.market_name].push(r);
+        });
+      %>
+      <% Object.entries(normalMarkets).forEach(([mname, rows]) => { %>
+      <div class="market-section">
+        <div class="market-section-title">🏪 <%= mname %></div>
+        <% rows.forEach(r => { %>
+        <div class="market-item-row">
+          <span>
+            <span class="code-badge"><%= r.code %></span>
+            <span><%= r.art_name %></span>
+          </span>
+          <span class="qty"><%= r.next_day_qty %></span>
+        </div>
         <% }) %>
-      </tbody>
-      <tfoot>
-        <tr style="background: var(--surface2); border-top: 2px solid var(--primary);">
-          <td style="font-weight: 800; font-size: 16px; padding: 14px 16px;">Вкупно сите артикли:</td>
-          <td style="font-weight: 800; font-size: 22px; color: var(--primary); padding: 14px 16px; text-align: right;"><%= grandTotal %></td>
-        </tr>
-      </tfoot>
-    </table>
+      </div>
+      <% }) %>
+    <% } %>
   </div>
 
-  <!-- Per-market breakdown -->
-  <%
-    const markets = {};
-    byMarket.forEach(r => {
-      if (!markets[r.market_name]) markets[r.market_name] = [];
-      markets[r.market_name].push(r);
-    });
-  %>
-  <% Object.entries(markets).forEach(([mname, rows]) => { %>
-  <div class="market-section">
-    <div class="market-section-title">🏪 <%= mname %></div>
-    <% rows.forEach(r => { %>
-    <div class="market-item-row">
-      <span>
-        <span class="code-badge"><%= r.code %></span>
-        <span><%= r.art_name %></span>
-      </span>
-      <span class="qty"><%= r.next_day_qty %></span>
-    </div>
-    <% }) %>
+  <div class="tab-panel" id="tab-large">
+    <% if (largeByMarket.length === 0) { %>
+      <div class="empty-orders"><div class="msg">Нема нарачки за големи маркети</div></div>
+    <% } else { %>
+      <%
+        const largeMarketsGroups = {};
+        largeByMarket.forEach(r => {
+          if (!largeMarketsGroups[r.market_name]) largeMarketsGroups[r.market_name] = [];
+          largeMarketsGroups[r.market_name].push(r);
+        });
+        const lmNames = Object.keys(largeMarketsGroups);
+      %>
+      
+      <% if (lmNames.length > 1) { %>
+      <div style="margin: 0 16px 16px;">
+        <select id="large-market-select" onchange="showLargeMarket(this.value)" style="width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--border); font-size: 15px; font-weight: 700; background: var(--surface); color: var(--text); outline: none;">
+          <% lmNames.forEach((mname, idx) => { %>
+            <option value="<%= idx %>">🏬 <%= mname %></option>
+          <% }) %>
+        </select>
+      </div>
+      <% } else if (lmNames.length === 1) { %>
+        <div style="margin: 0 16px 16px; padding: 12px; border-radius: 10px; background: #ede9fe; color: #7c3aed; font-weight: 800; font-size: 15px;">
+          🏬 <%= lmNames[0] %>
+        </div>
+      <% } %>
+
+      <% lmNames.forEach((mname, idx) => { 
+        const mdataRows = largeMarketsGroups[mname];
+        let mTotal = 0;
+      %>
+      <div id="large-market-<%= idx %>" class="large-market-container" style="display: <%= idx===0 ? 'block' : 'none' %>;">
+        <div class="summary-card">
+          <table class="summary-table">
+            <thead>
+              <tr><th>Артикл</th><th style="text-align:right">Количина</th></tr>
+            </thead>
+            <tbody>
+              <% mdataRows.forEach(r => { mTotal += r.next_day_qty; %>
+              <tr>
+                <td>
+                  <span class="code-badge"><%= r.code %></span>
+                  <span><%= r.art_name %></span>
+                </td>
+                <td><%= r.next_day_qty %></td>
+              </tr>
+              <% }) %>
+            </tbody>
+            <tfoot>
+              <tr style="background: var(--surface2); border-top: 2px solid #7c3aed;">
+                <td style="font-weight: 800; font-size: 16px; padding: 14px 16px;">Вкупно за маркетот:</td>
+                <td style="font-weight: 800; font-size: 22px; color: #7c3aed; padding: 14px 16px; text-align: right;"><%= mTotal %></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+      <% }) %>
+    <% } %>
   </div>
-  <% }) %>
 
   <div style="height:32px"></div>
   <% } %>
 </div>
 
 <script>
+function switchTab(tab) {
+  document.getElementById('tab-normal').classList.toggle('active', tab === 'normal');
+  document.getElementById('tab-large').classList.toggle('active', tab === 'large');
+  document.getElementById('tab-normal-btn').classList.toggle('active', tab === 'normal');
+  document.getElementById('tab-large-btn').classList.toggle('active-large', tab === 'large');
+}
+
+function showLargeMarket(idx) {
+  document.querySelectorAll('.large-market-container').forEach(el => el.style.display = 'none');
+  const target = document.getElementById('large-market-' + idx);
+  if (target) target.style.display = 'block';
+}
 function goToDate(){
   const d = document.getElementById('date-picker').value;
   if (d) window.location.href = '/driver/tomorrow-orders?date=' + d;
