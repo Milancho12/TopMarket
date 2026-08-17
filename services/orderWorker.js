@@ -95,25 +95,42 @@ process.on('message', async ({ account, date }) => {
 
       log(`Account ${account.username} / Vozach ${driver.name}: Kolona e ${colResult.found}. Se popolnuvaat ${items.length} artikli...`);
 
-      for (const item of items) {
-        const extCode = (item.external_code || item.code).toString().trim();
-        await page.evaluate((code, qty, colIdx) => {
-          const rows = document.querySelectorAll('#MainContent_Pivot tbody tr');
+      const itemsPayload = items.map(i => ({
+        code: (i.external_code || i.code).toString().trim(),
+        qty: i.total_qty
+      }));
+
+      await page.evaluate((payload, colIdx) => {
+        const rows = document.querySelectorAll('#MainContent_Pivot tbody tr');
+        
+        // 1. Clear all inputs in this column to ensure cancelled items are removed
+        for (let i = 0; i < rows.length; i++) {
+          const input = rows[i].querySelector('td:nth-child(' + (colIdx + 1) + ') input');
+          if (input && input.value !== '' && input.value !== '0') {
+            input.focus();
+            input.value = '';
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+            input.dispatchEvent(new Event('blur', { bubbles: true }));
+          }
+        }
+
+        // 2. Set the quantities for the active items in the order
+        for (const item of payload) {
           for (let i = 0; i < rows.length; i++) {
             const codeCell = rows[i].querySelector('td:first-child');
-            if (codeCell && codeCell.innerText.trim() === code) {
+            if (codeCell && codeCell.innerText.trim() === item.code) {
               const input = rows[i].querySelector('td:nth-child(' + (colIdx + 1) + ') input');
               if (input) {
                 input.focus();
-                input.value = qty;
+                input.value = item.qty;
                 input.dispatchEvent(new Event('change', { bubbles: true }));
                 input.dispatchEvent(new Event('blur', { bubbles: true }));
-                return;
+                break;
               }
             }
           }
-        }, extCode, item.total_qty, colResult.found);
-      }
+        }
+      }, itemsPayload, colResult.found);
     }
 
     log(`Account ${account.username}: Klikam na kopcheto za Naracaj...`);

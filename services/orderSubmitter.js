@@ -80,7 +80,7 @@ async function submitOrdersForAccount(account) {
     if (normalItems.length > 0) {
       driverTasks.push({ driver, items: normalItems });
     } else {
-      console.log(`Account ${account.username}: Vozach ${driver.name} nema narachki za utre.`);
+      console.log(`[${new Date().toLocaleString('mk-MK')}] Account ${account.username}: Vozach ${driver.name} nema narachki za utre.`);
     }
 
     // Append large market tasks right after this driver's normal task
@@ -88,11 +88,11 @@ async function submitOrdersForAccount(account) {
   }
 
   if (driverTasks.length === 0) {
-    console.log(`Account ${account.username}: Nema nitu eden vozach so narachki.`);
+    console.log(`[${new Date().toLocaleString('mk-MK')}] Account ${account.username}: Nema nitu eden vozach so narachki.`);
     return;
   }
 
-  console.log(`Account ${account.username}: Pronadjeni narachki za ${driverTasks.length} vozachi.`);
+  console.log(`[${new Date().toLocaleString('mk-MK')}] Account ${account.username}: Pronadjeni narachki za ${driverTasks.length} vozachi.`);
 
   return new Promise((resolve) => {
     // Fork a completely separate process for Chrome — isolated from Express's event loop
@@ -120,16 +120,17 @@ async function submitOrdersForAccount(account) {
 
     // Relay worker log messages to our console
     worker.on('message', (msg) => {
+      const timePrefix = `[${new Date().toLocaleString('mk-MK')}]`;
       switch (msg.type) {
-        case 'log':    console.log(msg.msg);    break;
-        case 'warn':   console.warn(msg.msg);   break;
-        case 'error':  console.error(msg.msg);  break;
+        case 'log':    console.log(`${timePrefix} ${msg.msg}`);    break;
+        case 'warn':   console.warn(`${timePrefix} ${msg.msg}`);   break;
+        case 'error':  console.error(`${timePrefix} ${msg.msg}`);  break;
         case 'done':
-          console.log(`[Worker] Account ${account.username}: done.`);
+          console.log(`${timePrefix} [Worker] Account ${account.username}: done.`);
           finish();
           break;
         case 'failed':
-          console.error(`[Worker] Account ${account.username}: failed — ${msg.msg}`);
+          console.error(`${timePrefix} [Worker] Account ${account.username}: failed — ${msg.msg}`);
           finish();
           break;
       }
