@@ -270,7 +270,8 @@ router.get('/loading-list', async (req, res) => {
       const nd = await db.allAsync(`
         SELECT di.article_id, SUM(di.next_day_qty) total_qty
         FROM delivery_items di JOIN deliveries d ON d.id=di.delivery_id
-        WHERE d.driver_id=? AND d.date=? AND di.next_day_qty>0
+        JOIN markets m ON m.id=d.market_id
+        WHERE d.driver_id=? AND d.date=? AND di.next_day_qty>0 AND m.is_large=0
         GROUP BY di.article_id`, [driverId, prevDate]);
       nd.forEach(r => { nextDayMap[r.article_id] = r.total_qty; });
     }
@@ -322,7 +323,8 @@ router.get('/total-returns', async (req, res) => {
       FROM delivery_items di
       JOIN deliveries d ON d.id=di.delivery_id
       JOIN articles a ON a.id=di.article_id
-      WHERE d.driver_id=? AND d.date=?
+      JOIN markets m ON m.id=d.market_id
+      WHERE d.driver_id=? AND d.date=? AND m.is_large=0
       GROUP BY a.id ORDER BY a.sort_order`, [driverId, date]);
 
     // Per-market returns breakdown
@@ -333,7 +335,7 @@ router.get('/total-returns', async (req, res) => {
       JOIN deliveries d ON d.id=di.delivery_id
       JOIN articles a ON a.id=di.article_id
       JOIN markets m ON m.id=d.market_id
-      WHERE d.driver_id=? AND d.date=? AND di.returned_qty>0
+      WHERE d.driver_id=? AND d.date=? AND di.returned_qty>0 AND m.is_large=0
       ORDER BY m.name, a.sort_order`, [driverId, date]);
 
     // Loading list for balance
