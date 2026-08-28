@@ -108,7 +108,7 @@ process.on('message', async ({ account, date }) => {
           const input = rows[i].querySelector('td:nth-child(' + (colIdx + 1) + ') input');
           if (input && input.value !== '' && input.value !== '0') {
             input.focus();
-            input.value = '';
+            input.value = '0';
             input.dispatchEvent(new Event('change', { bubbles: true }));
             input.dispatchEvent(new Event('blur', { bubbles: true }));
           }
