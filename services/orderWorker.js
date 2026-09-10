@@ -18,7 +18,6 @@ function warn(msg) { process.send({ type: 'warn', msg }); }
 function error(msg) { process.send({ type: 'error', msg }); }
 function done() { process.send({ type: 'done' }); }
 function failed(msg) { process.send({ type: 'failed', msg }); }
-
 process.on('message', async ({ account, date }) => {
   // Route Chrome traffic through Every Proxy on the phone (Macedonian IP) via Tailscale.
   // Set SOCKS5_PROXY=<tailscale-phone-ip>:<every-proxy-port> in docker-compose.yml
@@ -46,6 +45,9 @@ process.on('message', async ({ account, date }) => {
   page.on('requestfailed', req => {
     warn(`Request failed: ${req.url()} - ${req.failure() ? req.failure().errorText : 'Unknown'}`);
   });
+
+  let success = false;
+  let errMsg = null;
 
   try {
     log(`Account ${account.username}: Se otvora Login stranata...`);
@@ -176,13 +178,25 @@ process.on('message', async ({ account, date }) => {
 
     if (message) log(`Account ${account.username}: Poraka od portal: "${message}"`);
     log(`Account ${account.username}: Narachkata e uspeshno ispratena za site vozachi na ovoj account!`);
-    done();
+    success = true;
 
   } catch (err) {
     error(`Account ${account.username} greshka: ${err.message}`);
     await new Promise(r => setTimeout(r, 3000));
-    failed(err.message);
+    errMsg = err.message;
   } finally {
-    await browser.close();
+    try {
+      await browser.close();
+    } catch (e) {
+      error(`Error closing browser: ${e.message}`);
+    }
+    
+    if (success) {
+      done();
+    } else {
+      failed(errMsg || 'Unknown error');
+    }
+    // Give parent process time to receive the message before exiting
+    setTimeout(() => process.exit(0), 500);
   }
 });

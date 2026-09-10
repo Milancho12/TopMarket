@@ -4,6 +4,31 @@ const { db } = require('../database');
 
 function today() { return new Date().toISOString().split('T')[0]; }
 
+// Global concurrency queue to avoid opening too many Chrome instances at once
+const MAX_CONCURRENT_WORKERS = 3;
+let activeWorkers = 0;
+const globalQueue = [];
+
+function processGlobalQueue() {
+  if (activeWorkers >= MAX_CONCURRENT_WORKERS || globalQueue.length === 0) return;
+  const { account, resolve, reject } = globalQueue.shift();
+  activeWorkers++;
+  submitOrdersForAccount(account)
+    .then(resolve)
+    .catch(reject)
+    .finally(() => {
+      activeWorkers--;
+      processGlobalQueue();
+    });
+}
+
+function enqueueGlobal(account) {
+  return new Promise((resolve, reject) => {
+    globalQueue.push({ account, resolve, reject });
+    processGlobalQueue();
+  });
+}
+
 /**
  * Per-account queue — key = "portal_username|portal_password"
  * Each value is the tail of a Promise chain for that account.
@@ -21,7 +46,7 @@ function enqueueAccount(account) {
   // Chain onto whatever is already queued for this account
   const prev = accountQueues.get(key) || Promise.resolve();
   const next = prev
-    .then(() => submitOrdersForAccount(account))
+    .then(() => enqueueGlobal(account)) // Enqueue to global concurrency limit
     .catch(err => console.error(`[Queue] Error for account ${account.username}:`, err));
   accountQueues.set(key, next);
   // Clean up the map entry once this run is the last one
@@ -105,18 +130,23 @@ async function submitOrdersForAccount(account) {
     worker.send({ account: { ...account, driverTasks }, date });
 
     let settled = false;
+    let forceKillTimeout;
+    
     function finish() {
       if (settled) return;
       settled = true;
-      // Ensure the worker process is fully terminated
-      try { worker.kill('SIGTERM'); } catch (_) {}
-      // Give it 2 s to exit gracefully, then SIGKILL
-      const forceKill = setTimeout(() => {
-        try { worker.kill('SIGKILL'); } catch (_) {}
-      }, 2000);
-      worker.once('exit', () => clearTimeout(forceKill));
+      if (forceKillTimeout) clearTimeout(forceKillTimeout);
       resolve();
     }
+
+    // Safety fallback: if worker hangs for more than 6 minutes, forcefully kill it
+    forceKillTimeout = setTimeout(() => {
+      if (!settled) {
+        console.error(`[Worker] Account ${account.username}: Timeout reached (6 min), forcefully killing worker.`);
+        try { worker.kill('SIGKILL'); } catch (_) {}
+        finish();
+      }
+    }, 6 * 60 * 1000);
 
     // Relay worker log messages to our console
     worker.on('message', (msg) => {
@@ -127,11 +157,12 @@ async function submitOrdersForAccount(account) {
         case 'error':  console.error(`${timePrefix} ${msg.msg}`);  break;
         case 'done':
           console.log(`${timePrefix} [Worker] Account ${account.username}: done.`);
-          finish();
+          // Do not call finish() here! Let the worker close browser and exit naturally
+          // to ensure Chrome profile temp files in /tmp are cleaned up.
           break;
         case 'failed':
           console.error(`${timePrefix} [Worker] Account ${account.username}: failed — ${msg.msg}`);
-          finish();
+          // Do not call finish() here! Let the worker close browser and exit naturally.
           break;
       }
     });
@@ -143,7 +174,8 @@ async function submitOrdersForAccount(account) {
 
     worker.on('exit', (code, signal) => {
       if (!settled) {
-        console.error(`Worker exited unexpectedly (code=${code}, signal=${signal})`);
+        if (code !== 0) console.error(`Worker exited unexpectedly (code=${code}, signal=${signal})`);
+        else console.log(`[Worker] Account ${account.username}: worker process exited cleanly.`);
         finish();
       }
     });
