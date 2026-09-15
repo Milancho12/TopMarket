@@ -13,7 +13,7 @@ COPY package*.json ./
 RUN npm install && npm rebuild sqlite3 --build-from-source
 
 # Create a symlink for the bundled Chrome to bypass Puppeteer version checks
-RUN ln -s $(find /home/pptruser/.cache/puppeteer/chrome -name "chrome" -type f | head -n 1) /usr/bin/google-chrome-stable
+RUN ln -sf $(find /home/pptruser/.cache/puppeteer/chrome -name "chrome" -type f | head -n 1) /usr/bin/google-chrome-stable
 
 # Copy all other files
 COPY . .
