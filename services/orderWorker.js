@@ -51,7 +51,7 @@ process.on('message', async ({ account, date }) => {
 
   try {
     log(`Account ${account.username}: Se otvora Login stranata...`);
-    await page.goto('http://217.16.86.112/MatrixTables/Login.aspx', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.goto('http://zitoluks.ddns.net/MatrixTables/Login.aspx', { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForSelector('input[name="ctl00$MainContent$UserName"]', { timeout: 10000 });
 
     await page.click('input[name="ctl00$MainContent$UserName"]', { clickCount: 3 });
@@ -102,9 +102,9 @@ process.on('message', async ({ account, date }) => {
         qty: i.total_qty
       }));
 
-      await page.evaluate((payload, colIdx) => {
+      const evaluateResult = await page.evaluate((payload, colIdx) => {
         const rows = document.querySelectorAll('#MainContent_Pivot tbody tr');
-        
+
         // 1. Clear all inputs in this column to ensure cancelled items are removed
         for (let i = 0; i < rows.length; i++) {
           const input = rows[i].querySelector('td:nth-child(' + (colIdx + 1) + ') input');
@@ -116,23 +116,35 @@ process.on('message', async ({ account, date }) => {
           }
         }
 
+        const unmatched = [];
         // 2. Set the quantities for the active items in the order
         for (const item of payload) {
+          let found = false;
           for (let i = 0; i < rows.length; i++) {
             const codeCell = rows[i].querySelector('td:first-child');
-            if (codeCell && codeCell.innerText.trim() === item.code) {
-              const input = rows[i].querySelector('td:nth-child(' + (colIdx + 1) + ') input');
-              if (input) {
-                input.focus();
-                input.value = item.qty;
-                input.dispatchEvent(new Event('change', { bubbles: true }));
-                input.dispatchEvent(new Event('blur', { bubbles: true }));
-                break;
+            if (codeCell) {
+              const cellText = codeCell.innerText.replace(/[\r\n\t ]+/g, ' ').trim();
+              if (cellText === item.code || cellText.includes(item.code)) {
+                const input = rows[i].querySelector('td:nth-child(' + (colIdx + 1) + ') input');
+                if (input) {
+                  input.focus();
+                  input.value = item.qty;
+                  input.dispatchEvent(new Event('change', { bubbles: true }));
+                  input.dispatchEvent(new Event('blur', { bubbles: true }));
+                  found = true;
+                  break;
+                }
               }
             }
           }
+          if (!found) unmatched.push(item.code);
         }
+        return { unmatched };
       }, itemsPayload, colResult.found);
+
+      if (evaluateResult.unmatched && evaluateResult.unmatched.length > 0) {
+        warn(`Account ${account.username} / Vozach ${driver.name}: Slednite artikli NE se pronajdeni vo Matrix tabelata: ${evaluateResult.unmatched.join(', ')}`);
+      }
     }
 
     log(`Account ${account.username}: Klikam na kopcheto za Naracaj...`);
@@ -190,7 +202,7 @@ process.on('message', async ({ account, date }) => {
     } catch (e) {
       error(`Error closing browser: ${e.message}`);
     }
-    
+
     if (success) {
       done();
     } else {

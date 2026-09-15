@@ -365,27 +365,24 @@ router.post('/send-order', async (req, res) => {
     }
 
     // ── Server-side guard: reject if nothing has changed since the last send ──
-    const today = new Date().toISOString().split('T')[0];
+    const dateToday = today(); // Use local today() function to avoid UTC timezone issues
     if (driver.last_order_sent_at) {
       const changed = await db.getAsync(`
         SELECT 1 FROM deliveries d
-        JOIN delivery_items di ON di.delivery_id = d.id
         WHERE d.driver_id = ? AND d.date = ?
-          AND di.next_day_qty > 0
           AND COALESCE(d.edited_at, d.submitted_at) > ?
         LIMIT 1`,
-        [driverId, today, driver.last_order_sent_at]);
+        [driverId, dateToday, driver.last_order_sent_at]);
       if (!changed) {
         return res.json({ success: false, error: 'Нема промени во нарачката од последното испраќање.' });
       }
     } else {
-      // Never sent — check that there is at least one item to send
-      const hasItems = await db.getAsync(`
+      // Never sent — check that there is at least one delivery recorded
+      const hasDeliveries = await db.getAsync(`
         SELECT 1 FROM deliveries d
-        JOIN delivery_items di ON di.delivery_id = d.id
-        WHERE d.driver_id = ? AND d.date = ? AND di.next_day_qty > 0 LIMIT 1`,
-        [driverId, today]);
-      if (!hasItems) {
+        WHERE d.driver_id = ? AND d.date = ? LIMIT 1`,
+        [driverId, dateToday]);
+      if (!hasDeliveries) {
         return res.json({ success: false, error: 'Нема нарачки за утре за испраќање.' });
       }
     }

@@ -99,6 +99,8 @@
                       <button class="btn btn-sm btn-outline no-print"
                         onclick="viewDelivery(<%= d.id %>)">Детали</button>
                       <button class="btn btn-sm btn-outline no-print"
+                        onclick="editDelivery(<%= d.id %>)">Уреди</button>
+                      <button class="btn btn-sm btn-outline no-print"
                         style="color:var(--danger);border-color:var(--danger)"
                         onclick="deleteDelivery(<%= d.id %>)">Избриши</button>
                     </div>
@@ -118,6 +120,21 @@
         <h3 id="modal-det-title">Детали</h3><button class="modal-close" onclick="closeModal('modal-detail')">✕</button>
       </div>
       <div class="modal-body" id="modal-det-body"></div>
+    </div>
+  </div>
+
+  <!-- Edit Modal -->
+  <div class="modal-overlay" id="modal-edit">
+    <div class="modal" style="max-width:800px; max-height: 90vh; display: flex; flex-direction: column;">
+      <div class="modal-header">
+        <h3 id="modal-edit-title">Уреди испорака</h3>
+        <button class="modal-close" onclick="closeModal('modal-edit')">✕</button>
+      </div>
+      <div class="modal-body" id="modal-edit-body" style="overflow-y: auto; flex: 1;"></div>
+      <div class="modal-footer" style="padding: 16px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px;">
+        <button class="btn btn-outline" onclick="closeModal('modal-edit')">Откажи</button>
+        <button class="btn btn-primary" id="btn-save-edit" onclick="saveEdit()">Зачувај</button>
+      </div>
     </div>
   </div>
 
@@ -158,6 +175,74 @@
       html += '</tbody></table>';
       document.getElementById('modal-det-title').textContent = d.market_name + ' – ' + d.date;
       document.getElementById('modal-det-body').innerHTML = html;
+    }
+
+    let currentEditId = null;
+    async function editDelivery(id) {
+      currentEditId = id;
+      openModal('modal-edit');
+      document.getElementById('modal-edit-body').innerHTML = '<div class="empty"><div class="empty-icon">⏳</div><p>Се вчитува...</p></div>';
+      const res = await fetch('/admin/api/reports/' + id + '/edit-data');
+      const data = await res.json();
+      if(data.error) return alert(data.error);
+      
+      const d = data.delivery;
+      document.getElementById('modal-edit-title').textContent = 'Уреди: ' + d.market_name + ' – ' + d.date;
+      
+      let html = `<div style="margin-bottom: 12px;"><label>Забелешка:</label><input type="text" id="edit-notes" class="form-control" value="${d.notes || ''}" style="width:100%; padding: 8px; margin-top: 4px; border: 1px solid var(--border); border-radius: 4px;"></div>`;
+      
+      html += '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="border-bottom:1px solid var(--border)"><th style="text-align:left;padding:8px 4px;color:var(--text3)">Артикл</th><th style="padding:8px;color:var(--text3);width:80px">Испор.</th><th style="padding:8px;color:var(--text3);width:80px">Врат.</th><th style="padding:8px;color:var(--text3);width:80px">Утре</th></tr></thead><tbody id="edit-items-tbody">';
+      
+      data.articles.forEach(a => {
+        const item = data.itemsMap[a.id] || { delivered_qty: 0, returned_qty: 0, next_day_qty: 0 };
+        html += `<tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:8px 4px"><span style="background:var(--surface2);color:var(--text3);font-size:11px;padding:1px 6px;border-radius:4px;margin-right:6px">${a.code}</span>${a.name}</td>
+          <td style="padding:4px"><input type="number" class="edit-qty-input" data-field="delivered" data-aid="${a.id}" value="${item.delivered_qty || 0}" min="0" style="width:100%; padding: 6px; text-align: center; border: 1px solid var(--border); border-radius: 4px;"></td>
+          <td style="padding:4px"><input type="number" class="edit-qty-input" data-field="returned" data-aid="${a.id}" value="${item.returned_qty || 0}" min="0" style="width:100%; padding: 6px; text-align: center; border: 1px solid var(--border); border-radius: 4px;"></td>
+          <td style="padding:4px"><input type="number" class="edit-qty-input" data-field="next_day" data-aid="${a.id}" value="${item.next_day_qty || 0}" min="0" style="width:100%; padding: 6px; text-align: center; border: 1px solid var(--border); border-radius: 4px;"></td>
+        </tr>`;
+      });
+      html += '</tbody></table>';
+      document.getElementById('modal-edit-body').innerHTML = html;
+    }
+
+    async function saveEdit() {
+      if(!currentEditId) return;
+      const btn = document.getElementById('btn-save-edit');
+      btn.disabled = true;
+      btn.textContent = 'Се зачувува...';
+      
+      const notes = document.getElementById('edit-notes').value;
+      const inputs = document.querySelectorAll('.edit-qty-input');
+      const items = {};
+      
+      inputs.forEach(input => {
+        const aid = input.dataset.aid;
+        const field = input.dataset.field;
+        const val = parseInt(input.value) || 0;
+        if (!items[aid]) items[aid] = {};
+        items[aid][field] = val;
+      });
+      
+      try {
+        const res = await fetch('/admin/api/reports/' + currentEditId, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ notes, items })
+        });
+        const data = await res.json();
+        if(data.success) {
+          location.reload();
+        } else {
+          alert(data.error || 'Грешка при зачувување');
+          btn.disabled = false;
+          btn.textContent = 'Зачувај';
+        }
+      } catch (e) {
+        alert('Грешка: ' + e.message);
+        btn.disabled = false;
+        btn.textContent = 'Зачувај';
+      }
     }
 
     async function deleteDelivery(id) {

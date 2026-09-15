@@ -771,6 +771,53 @@ router.delete('/api/reports/:id', async (req, res) => {
   } catch (e) { res.json({ success: false, error: e.message }); }
 });
 
+router.get('/api/reports/:id/edit-data', async (req, res) => {
+  try {
+    const delivery = await db.getAsync('SELECT d.*, m.is_large, m.name market_name FROM deliveries d JOIN markets m ON m.id=d.market_id WHERE d.id=?', [req.params.id]);
+    if (!delivery) return res.json({ error: 'Not found' });
+    
+    let articles;
+    if (delivery.is_large) {
+      articles = await db.allAsync(`
+        SELECT a.* FROM articles a
+        JOIN market_articles ma ON ma.article_id = a.id
+        WHERE ma.market_id = ? AND a.active = 1
+        ORDER BY a.sort_order`, [delivery.market_id]);
+    } else {
+      articles = await db.allAsync('SELECT * FROM articles WHERE active=1 AND is_market_article=0 ORDER BY sort_order');
+    }
+    
+    const items = await db.allAsync('SELECT * FROM delivery_items WHERE delivery_id=?', [delivery.id]);
+    const itemsMap = {};
+    items.forEach(i => itemsMap[i.article_id] = i);
+    
+    res.json({ delivery, articles, itemsMap });
+  } catch (e) { res.json({ error: e.message }); }
+});
+
+router.put('/api/reports/:id', async (req, res) => {
+  try {
+    const delivery = await db.getAsync('SELECT * FROM deliveries WHERE id=?', [req.params.id]);
+    if (!delivery) return res.json({ success: false, error: 'Not found' });
+    
+    const { items, notes } = req.body;
+    await db.runAsync('UPDATE deliveries SET notes=?, edited_at=? WHERE id=?', [notes||null, new Date().toISOString(), delivery.id]);
+    
+    if (items && typeof items === 'object') {
+      for (const [aId, q] of Object.entries(items)) {
+        const del = parseInt(q.delivered)||0;
+        const ret = parseInt(q.returned)||0;
+        const nxt = parseInt(q.next_day)||0;
+        await db.runAsync(
+          `INSERT INTO delivery_items (delivery_id,article_id,delivered_qty,returned_qty,next_day_qty) VALUES (?,?,?,?,?)
+           ON CONFLICT(delivery_id,article_id) DO UPDATE SET delivered_qty=excluded.delivered_qty, returned_qty=excluded.returned_qty, next_day_qty=excluded.next_day_qty`,
+          [delivery.id, parseInt(aId), del, ret, nxt]);
+      }
+    }
+    res.json({ success: true });
+  } catch(e) { res.json({ success: false, error: e.message }); }
+});
+
 // ── API: DRIVER MARKETS (permanent assignments) ───────────
 
 router.get('/api/driver-markets/:driverId', async (req, res) => {

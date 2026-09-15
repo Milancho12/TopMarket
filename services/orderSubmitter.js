@@ -2,7 +2,10 @@ const { fork } = require('child_process');
 const path = require('path');
 const { db } = require('../database');
 
-function today() { return new Date().toISOString().split('T')[0]; }
+function today() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
 
 // Global concurrency queue to avoid opening too many Chrome instances at once
 const MAX_CONCURRENT_WORKERS = 3;
@@ -75,6 +78,12 @@ async function submitOrdersForAccount(account) {
       GROUP BY a.id
       ORDER BY a.sort_order`, [driver.id, date]);
 
+    // Does this driver have ANY normal market deliveries for today?
+    const hasNormalDeliveries = await db.getAsync(`
+      SELECT 1 FROM deliveries d
+      JOIN markets m ON m.id = d.market_id
+      WHERE d.driver_id = ? AND d.date = ? AND m.is_large = 0 LIMIT 1`, [driver.id, date]);
+
     // Large market next_day quantities — each large market gets its OWN column
     const largeMarkets = await db.allAsync(`
       SELECT DISTINCT m.id, m.name, m.portal_column_id
@@ -94,15 +103,15 @@ async function submitOrdersForAccount(account) {
         WHERE d.driver_id=? AND d.market_id=? AND d.date=? AND di.next_day_qty > 0
         GROUP BY a.id
         ORDER BY a.sort_order`, [driver.id, lm.id, date]);
-      if (lmItems.length > 0) {
-        largeMarketTasks.push({
-          driver: { ...driver, portal_column_id: lm.portal_column_id, name: lm.name },
-          items: lmItems
-        });
-      }
+      // Always push the task so the column gets cleared even if all items are 0
+      largeMarketTasks.push({
+        driver: { ...driver, portal_column_id: lm.portal_column_id, name: lm.name },
+        items: lmItems
+      });
     }
 
-    if (normalItems.length > 0) {
+    if (hasNormalDeliveries || normalItems.length > 0) {
+      // Even if normalItems is empty (everything zeroed), we must push it to clear the column
       driverTasks.push({ driver, items: normalItems });
     } else {
       console.log(`[${new Date().toLocaleString('mk-MK')}] Account ${account.username}: Vozach ${driver.name} nema narachki za utre.`);
