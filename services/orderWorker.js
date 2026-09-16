@@ -7,8 +7,6 @@
  * Messages to parent:   { log, warn, error, done, failed }
  */
 
-const puppeteer = require('puppeteer');
-
 function normalizeText(str) {
   return (str || '').replace(/[\r\n\t ]+/g, ' ').trim().toLowerCase();
 }
@@ -19,6 +17,9 @@ function error(msg) { process.send({ type: 'error', msg }); }
 function done() { process.send({ type: 'done' }); }
 function failed(msg) { process.send({ type: 'failed', msg }); }
 process.on('message', async ({ account, date }) => {
+  const puppeteerModule = await import('puppeteer');
+  const puppeteer = puppeteerModule.default || puppeteerModule;
+
   // Route Chrome traffic through Every Proxy on the phone (Macedonian IP) via Tailscale.
   // Set SOCKS5_PROXY=<tailscale-phone-ip>:<every-proxy-port> in docker-compose.yml
   const proxyArgs = process.env.SOCKS5_PROXY
